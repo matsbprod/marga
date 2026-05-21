@@ -1392,7 +1392,7 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
           pendingPivot = null;
         }
         // Rotate
-        rotation.current.y += dx * 0.005;
+        rotation.current.y -= dx * 0.005;
         rotation.current.x += dy * 0.005;
         rotation.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotation.current.x));
         updateCamera();
