@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif; background: #F5F0E6; min-height: 100vh; }
@@ -697,21 +698,84 @@ function Stats({ tasks }) {
   );
 }
 
+// ─── PDF Thumbnail (renders first page via PDF.js) ───
+function PdfThumbnail({ url, onClick }) {
+  const canvasRef = useRef(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!window.pdfjsLib) { setFailed(true); return; }
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    let cancelled = false;
+    window.pdfjsLib.getDocument({ url, withCredentials: false }).promise.then(pdf => {
+      if (cancelled) return;
+      return pdf.getPage(1);
+    }).then(page => {
+      if (cancelled || !canvasRef.current) return;
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = 170 / viewport.width;
+      const scaled = page.getViewport({ scale });
+      const canvas = canvasRef.current;
+      canvas.width = scaled.width;
+      canvas.height = scaled.height;
+      page.render({ canvasContext: canvas.getContext("2d"), viewport: scaled });
+    }).catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [url]);
+
+  if (failed) return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+      <span style={{ fontSize: 32 }}>📄</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", background: "#E5DDD0", padding: "2px 6px", borderRadius: 4 }}>PDF</span>
+    </div>
+  );
+
+  return (
+    <canvas ref={canvasRef} onClick={onClick}
+      style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in", display: "block" }} />
+  );
+}
+
+// ─── PDF Viewer Modal ───
+function PdfViewerModal({ url, name, onClose }) {
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(20,15,10,0.85)", zIndex: 9999,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: "min(900px, 95vw)", height: "min(85vh, 1100px)",
+        background: "#FFFDF8", borderRadius: 12, overflow: "hidden",
+        display: "flex", flexDirection: "column",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid #E5DDD0", background: "#FAF6EF", flexShrink: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#3A2E22", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {name}</div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <a href={url} target="_blank" rel="noreferrer" download
+              style={{ padding: "5px 12px", background: "#5B7F6E", color: "#fff", borderRadius: 6, fontSize: 11, fontWeight: 700, textDecoration: "none" }}>↓ Ladda ner</a>
+            <button onClick={onClose}
+              style={{ padding: "5px 10px", background: "none", border: "1px solid #DDD5C8", borderRadius: 6, fontSize: 13, cursor: "pointer", color: "#6B5D4E" }}>✕ Stäng</button>
+          </div>
+        </div>
+        {/* PDF embed */}
+        <iframe src={`${url}#toolbar=1&navpanes=0`} style={{ flex: 1, border: "none", width: "100%" }} title={name} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Image Gallery ───
 function ImageGallery({ onPreview, folders, setFolders }) {
-  const [ghFolders, setGhFolders] = useState([]);   // folders from GitHub
+  const [ghFolders, setGhFolders] = useState([]);
   const [activeFolder, setActiveFolder] = useState(null);
-  const [folderFiles, setFolderFiles] = useState([]); // files in active GitHub folder
+  const [folderFiles, setFolderFiles] = useState([]);
   const [ghLoading, setGhLoading] = useState(false);
   const [ghError, setGhError] = useState("");
-  const [mode, setMode] = useState("github"); // "github" | "manual"
-
-  // Manual mode state (kept for fallback)
-  const [addingImage, setAddingImage] = useState(false);
-  const [newUrl, setNewUrl] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newFolderName, setNewFolderName] = useState("");
-  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [pdfViewer, setPdfViewer] = useState(null); // { url, name }
 
   const inputStyle = { padding: "8px 10px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FBF8F2", fontSize: 13, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
 
@@ -797,6 +861,7 @@ function ImageGallery({ onPreview, folders, setFolders }) {
 
   return (
     <div>
+      {pdfViewer && <PdfViewerModal url={pdfViewer.url} name={pdfViewer.name} onClose={() => setPdfViewer(null)} />}
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
         <div>
@@ -883,33 +948,43 @@ function ImageGallery({ onPreview, folders, setFolders }) {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
                   {folderFiles.map((file, idx) => {
                     const isImg = isImageFile(file.name);
+                    const isPdf = file.name.toLowerCase().endsWith(".pdf");
                     const rawUrl = `${GITHUB_RAW}/${file.path}`;
                     const ext = file.name.split(".").pop().toUpperCase();
+                    const handleClick = () => {
+                      if (isImg) onPreview(rawUrl, file.name);
+                      else if (isPdf) setPdfViewer({ url: rawUrl, name: file.name });
+                      else window.open(rawUrl, "_blank");
+                    };
                     return (
                       <div key={idx}
                         style={{ background: "#FFFDF8", borderRadius: 10, border: "1.5px solid #E5DDD0", overflow: "hidden", transition: "box-shadow 0.15s, transform 0.15s", cursor: "pointer" }}
                         onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(80,60,40,0.12)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
                         onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}
-                        onClick={() => isImg ? onPreview(rawUrl, file.name) : window.open(rawUrl, "_blank")}
+                        onClick={handleClick}
                       >
                         {/* Thumbnail */}
-                        <div style={{ width: "100%", height: 130, background: "#F0EBE2", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" }}>
+                        <div style={{ width: "100%", height: 130, background: "#F0EBE2", overflow: "hidden", position: "relative" }}>
                           {isImg ? (
-                            <img src={rawUrl} alt={file.name} style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                              onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
-                          ) : null}
-                          <div style={{ display: isImg ? "none" : "flex", position: isImg ? "absolute" : "static", inset: 0, flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                            <span style={{ fontSize: 32 }}>{ext === "PDF" ? "📄" : ext === "DWG" || ext === "DXF" ? "📐" : ext === "3DM" || ext === "STEP" || ext === "STP" ? "◈" : "📎"}</span>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", background: "#E5DDD0", padding: "2px 6px", borderRadius: 4 }}>{ext}</span>
-                          </div>
+                            <img src={rawUrl} alt={file.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : isPdf ? (
+                            <PdfThumbnail url={rawUrl} onClick={handleClick} />
+                          ) : (
+                            <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                              <span style={{ fontSize: 32 }}>{ext === "DWG" || ext === "DXF" ? "📐" : ext === "3DM" || ext === "STEP" || ext === "STP" ? "◈" : "📎"}</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", background: "#E5DDD0", padding: "2px 6px", borderRadius: 4 }}>{ext}</span>
+                            </div>
+                          )}
                         </div>
                         {/* Name + actions */}
                         <div style={{ padding: "8px 10px" }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "#3A2E22", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={file.name}>{file.name}</div>
                           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                            {isImg && (
-                              <button onClick={e => { e.stopPropagation(); onPreview(rawUrl, file.name); }}
-                                style={{ flex: 1, padding: "4px 0", fontSize: 10, fontWeight: 700, background: "#F0EBE2", border: "none", borderRadius: 5, cursor: "pointer", color: "#5A4A38" }}>👁 Visa</button>
+                            {(isImg || isPdf) && (
+                              <button onClick={e => { e.stopPropagation(); handleClick(); }}
+                                style={{ flex: 1, padding: "4px 0", fontSize: 10, fontWeight: 700, background: "#F0EBE2", border: "none", borderRadius: 5, cursor: "pointer", color: "#5A4A38" }}>
+                                {isPdf ? "📄 Öppna" : "👁 Visa"}
+                              </button>
                             )}
                             <a href={rawUrl} download target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                               style={{ flex: 1, padding: "4px 0", fontSize: 10, fontWeight: 700, background: "#E8F0EC", border: "none", borderRadius: 5, cursor: "pointer", color: "#3A5A4A", textDecoration: "none", textAlign: "center" }}>↓ Ladda ner</a>
