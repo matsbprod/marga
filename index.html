@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Renovering Marga III — Projektplanering</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif; background: #F5F0E6; min-height: 100vh; }
+::-webkit-scrollbar { height: 8px; width: 8px; }
+::-webkit-scrollbar-track { background: #F0EBE2; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #C4B89E; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #A89878; }
+.toast { position: fixed; bottom: 24px; right: 24px; background: #3A2E22; color: #FFFDF8; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; z-index: 2000; opacity: 0; transform: translateY(10px); transition: all 0.3s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.lightbox { position: fixed; inset: 0; background: rgba(30,24,16,0.85); z-index: 3000; display: flex; align-items: center; justify-content: center; cursor: zoom-out; backdrop-filter: blur(4px); }
+.lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 10px; box-shadow: 0 8px 40px rgba(0,0,0,0.5); }
+.lightbox-caption { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); color: #FFFDF8; font-size: 13px; background: rgba(58,46,34,0.8); padding: 6px 16px; border-radius: 6px; }
+.file-card { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #FAF6EF; border: 1.5px solid #E5DDD0; border-radius: 8px; transition: border-color 0.15s, box-shadow 0.15s; }
+.file-card:hover { border-color: #C4B89E; box-shadow: 0 2px 8px rgba(80,60,40,0.1); }
+.file-icon { width: 40px; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #fff; flex-shrink: 0; letter-spacing: 0.02em; }
+.file-actions a, .file-actions button { font-size: 11px; font-weight: 600; cursor: pointer; border: none; background: none; padding: 2px 6px; border-radius: 4px; text-decoration: none; transition: background 0.15s; }
+.file-actions a:hover, .file-actions button:hover { background: rgba(0,0,0,0.06); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toast" class="toast"></div>
+
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+// ─── Constants ───
+const PHASES = [
+  { id: "blyköl",        label: "Blyköl",                              color: "#5A6B7A" },
+  { id: "däck",          label: "Däck",                                color: "#8B7355" },
+  { id: "el",            label: "El, vvs, toa installationer",          color: "#D4A76A" },
+  { id: "elmotor",       label: "Elmotor",                             color: "#5B7F6E" },
+  { id: "inredning",     label: "Inredning",                           color: "#7D6B91" },
+  { id: "konstruktion",  label: "Konstruktion och layout",             color: "#A67B5B" },
+  { id: "mast",          label: "Mast",                                color: "#6E7F8D" },
+  { id: "material",      label: "Material",                            color: "#C49A6C" },
+  { id: "projektledning",label: "Projektledning",                      color: "#4A7C6F" },
+  { id: "rivning",       label: "Rivning",                             color: "#C75B4A" },
+  { id: "roder",         label: "Roder",                               color: "#5A7A8A" },
+  { id: "segel",         label: "Segel",                               color: "#7A8A5A" },
+  { id: "skrov",         label: "Skrov, Spant, bottenstockar",         color: "#8B6347" },
+  { id: "överbyggnad",   label: "Överbyggnader. Ruff, Sittbrunn",      color: "#6B7A8B" },
+];
+
+const STATUSES = [
+  { id: "backlog",     label: "Att göra",   icon: "○" },
+  { id: "ready",       label: "Redo",       icon: "◐" },
+  { id: "in_progress", label: "Pågående",   icon: "◑" },
+  { id: "review",      label: "Granskning", icon: "◕" },
+  { id: "done",        label: "Klart",      icon: "●" },
+];
+
+
+const STORAGE_KEY = "boat_restoration_planner_v2";
+const TOTAL_WEEKS = 30;
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  JSONBIN KONFIGURATION — FYLL I DINA UPPGIFTER HÄR     ║
+// ║                                                          ║
+// ║  1. Skapa konto på https://jsonbin.io                    ║
+// ║  2. Kopiera din "X-Master-Key" från Dashboard            ║
+// ║  3. Klicka "Create a Bin" → klistra in: []               ║
+// ║  4. Kopiera Bin-ID:t (ser ut som 65a1b2c3d4e5f6...)     ║
+// ║  5. Fyll i nedan och ladda upp filen till Netlify igen   ║
+// ╚══════════════════════════════════════════════════════════╝
+const JSONBIN_CONFIG = {
+  API_KEY: "$2a$10$M0wAqXZA.0zEcfeMmQeXNu9JZAwGz8Q0Os2E/gmCURLa5USE798Nm",
+  BIN_ID: "699f0d97d0ea881f40d889eb",
+  BASE_URL: "https://api.jsonbin.io/v3",
+};
+
+function isJsonBinConfigured() {
+  return JSONBIN_CONFIG.API_KEY.length > 0 && JSONBIN_CONFIG.BIN_ID.length > 0;
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CLOUDFLARE WORKER PROXY — FÖR 3D-VISNING              ║
+// ║                                                          ║
+// ║  Behövs för att ladda .3dm-filer från Google Drive.     ║
+// ║  Se filen "cloudflare-worker.js" för installationsguide ║
+// ║  Fyll i din Worker-URL nedan efter deploy.              ║
+// ╚══════════════════════════════════════════════════════════╝
+const CORS_PROXY_URL = "https://gdrive-proxy.matsbprod.workers.dev";
+
+function isProxyConfigured() {
+  return CORS_PROXY_URL.length > 0;
+}
+
+// File type definitions
+const FILE_TYPES = {
+  image:  { label: "Bild",  extensions: ["jpg","jpeg","png","gif","webp","svg","bmp","tiff"], color: "#5B7F6E", icon: "IMG" },
+  pdf:    { label: "PDF",   extensions: ["pdf"], color: "#C75B4A", icon: "PDF" },
+  cad:    { label: "CAD",   extensions: ["dwg","dxf","step","stp","stl","iges","igs","3dm","skp","f3d","fcstd","obj"], color: "#5A7A8A", icon: "CAD" },
+  doc:    { label: "Dokument", extensions: ["doc","docx","odt","txt","rtf","xls","xlsx","csv"], color: "#D4A76A", icon: "DOK" },
+  other:  { label: "Övrigt", extensions: [], color: "#8A7D6B", icon: "FIL" },
+};
+
+function detectFileType(nameOrUrl) {
+  const str = (nameOrUrl || "").toLowerCase();
+  const ext = str.split(".").pop().split("?")[0].split("#")[0];
+  for (const [key, def] of Object.entries(FILE_TYPES)) {
+    if (def.extensions.includes(ext)) return key;
+  }
+  if (str.includes("drive.google.com")) return "image";
+  return "other";
+}
+
+function getFileTypeDef(type) {
+  return FILE_TYPES[type] || FILE_TYPES.other;
+}
+
+const DEFAULT_TASKS = [
+  { id: 1,  title: "Projektplan och tidplan",          phase: "projektledning", status: "backlog", startWeek: 1,  duration: 2, notes: "", files: [] },
+  { id: 2,  title: "Budget och materialanskaffning",   phase: "material",       status: "backlog", startWeek: 1,  duration: 3, notes: "", files: [] },
+  { id: 3,  title: "Rivning och demontering",          phase: "rivning",        status: "backlog", startWeek: 3,  duration: 3, notes: "", files: [] },
+  { id: 4,  title: "Besiktning skrov och spant",       phase: "skrov",          status: "backlog", startWeek: 5,  duration: 2, notes: "", files: [] },
+  { id: 5,  title: "Reparation bottenstockar",         phase: "skrov",          status: "backlog", startWeek: 6,  duration: 4, notes: "", files: [] },
+  { id: 6,  title: "Konstruktionsritningar",           phase: "konstruktion",   status: "backlog", startWeek: 2,  duration: 2, notes: "", files: [] },
+  { id: 7,  title: "Däcksbyte/-reparation",            phase: "däck",           status: "backlog", startWeek: 9,  duration: 4, notes: "", files: [] },
+  { id: 8,  title: "Ruff och sittbrunn",               phase: "överbyggnad",    status: "backlog", startWeek: 12, duration: 4, notes: "", files: [] },
+  { id: 9,  title: "Inredning kabin",                  phase: "inredning",      status: "backlog", startWeek: 15, duration: 5, notes: "", files: [] },
+  { id: 10, title: "El-installation",                  phase: "el",             status: "backlog", startWeek: 16, duration: 3, notes: "", files: [] },
+  { id: 11, title: "VVS och toainstallation",          phase: "el",             status: "backlog", startWeek: 17, duration: 2, notes: "", files: [] },
+  { id: 12, title: "Elmotor och drivsystem",           phase: "elmotor",        status: "backlog", startWeek: 18, duration: 3, notes: "", files: [] },
+  { id: 13, title: "Roder renovering",                 phase: "roder",          status: "backlog", startWeek: 10, duration: 2, notes: "", files: [] },
+  { id: 14, title: "Blyköl inspektion och montering",  phase: "blyköl",         status: "backlog", startWeek: 8,  duration: 2, notes: "", files: [] },
+  { id: 15, title: "Mastbeslaget och bom",             phase: "mast",           status: "backlog", startWeek: 22, duration: 2, notes: "", files: [] },
+  { id: 16, title: "Segel och rigg",                   phase: "segel",          status: "backlog", startWeek: 24, duration: 2, notes: "", files: [] },
+];
+
+// ─── Helpers ───
+function getWeekLabel(week) {
+  const d = new Date(2026, 2, 2);
+  d.setDate(d.getDate() + (week - 1) * 7);
+  return d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+}
+
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+function loadTasksLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed.map(t => ({ ...t, files: (t.files || []).map(f => ({ ...f, type: f.type || detectFileType(f.name || f.url) })) }));
+    }
+  } catch (e) { console.warn("Kunde inte ladda sparad data:", e); }
+  return null;
+}
+
+function saveTasksLocal(tasks) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+  catch (e) { console.warn("Kunde inte spara lokalt:", e); }
+}
+
+// ─── JSONBin Cloud Sync (combined: tasks + gallery) ───
+function normalizeTasks(arr) {
+  if (!Array.isArray(arr)) return null;
+  return arr.map(t => ({ ...t, files: (t.files || []).map(f => ({ ...f, type: f.type || detectFileType(f.name || f.url) })) }));
+}
+
+async function loadFromCloud() {
+  if (!isJsonBinConfigured()) return null;
+  try {
+    const res = await fetch(`${JSONBIN_CONFIG.BASE_URL}/b/${JSONBIN_CONFIG.BIN_ID}/latest`, {
+      headers: { "X-Master-Key": JSONBIN_CONFIG.API_KEY }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const record = data.record;
+    // Support both old format (plain array) and new format ({ tasks, gallery })
+    if (Array.isArray(record)) {
+      return { tasks: normalizeTasks(record), gallery: null };
+    }
+    if (record && record.tasks) {
+      return { tasks: normalizeTasks(record.tasks), gallery: record.gallery || null };
+    }
+    return null;
+  } catch (e) { console.warn("Kunde inte hämta från JSONBin:", e); return null; }
+}
+
+async function saveToCloud(tasks, gallery) {
+  if (!isJsonBinConfigured()) return false;
+  try {
+    const res = await fetch(`${JSONBIN_CONFIG.BASE_URL}/b/${JSONBIN_CONFIG.BIN_ID}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Master-Key": JSONBIN_CONFIG.API_KEY },
+      body: JSON.stringify({ tasks, gallery }),
+    });
+    return res.ok;
+  } catch (e) { console.warn("Kunde inte spara till JSONBin:", e); return false; }
+}
+
+// Debounce helper for combined save
+function createDebouncedSaver(delayMs = 1500) {
+  let timer = null;
+  return function debouncedSave(tasks, gallery, onStatus) {
+    if (timer) clearTimeout(timer);
+    onStatus("saving");
+    saveTasksLocal(tasks);
+    saveGalleryLocal(gallery);
+    if (!isJsonBinConfigured()) { onStatus("offline"); return; }
+    timer = setTimeout(async () => {
+      const ok = await saveToCloud(tasks, gallery);
+      onStatus(ok ? "saved" : "error");
+    }, delayMs);
+  };
+}
+
+// ─── Sync Status Indicator Component ───
+function SyncIndicator({ status }) {
+  const configs = {
+    idle:    { color: "#A89878", text: "—" },
+    saving:  { color: "#D4A76A", text: "Sparar…" },
+    saved:   { color: "#5B7F6E", text: "Synkad ✓" },
+    error:   { color: "#C75B4A", text: "Synkfel ✗" },
+    offline: { color: "#8A7D6B", text: "Lokal" },
+    loading: { color: "#D4A76A", text: "Laddar…" },
+  };
+  const cfg = configs[status] || configs.idle;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: cfg.color, fontWeight: 600 }}>
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: cfg.color, display: "inline-block", animation: status === "saving" || status === "loading" ? "pulse 1s infinite" : "none" }} />
+      {cfg.text}
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+    </div>
+  );
+}
+
+// ─── Gallery Storage ───
+const GALLERY_KEY = "boat_gallery_v1";
+const DEFAULT_FOLDERS = [
+  { id: "ritningar", name: "Ritningar", icon: "📐", images: [] },
+  { id: "rivning", name: "Rivning", icon: "🔨", images: [] },
+  { id: "historiska", name: "Historiska bilder", icon: "📷", images: [] },
+];
+
+function loadGalleryLocal() {
+  try {
+    const raw = localStorage.getItem(GALLERY_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { console.warn("Kunde inte ladda bildarkiv:", e); }
+  return DEFAULT_FOLDERS;
+}
+
+function saveGalleryLocal(folders) {
+  try { localStorage.setItem(GALLERY_KEY, JSON.stringify(folders)); }
+  catch (e) { console.warn("Kunde inte spara bildarkiv:", e); }
+}
+
+// ─── URL helpers — stödjer GitHub raw och Google Drive ───
+function isGithubUrl(url) {
+  return url && (url.includes("raw.githubusercontent.com") || url.includes("github.com"));
+}
+
+function isGdriveUrl(url) {
+  return url && (url.includes("drive.google.com") || url.includes("docs.google.com"));
+}
+
+function extractGdriveId(url) {
+  const patterns = [/\/file\/d\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/, /\/d\/([a-zA-Z0-9_-]+)/];
+  for (const p of patterns) { const m = url.match(p); if (m) return m[1]; }
+  return null;
+}
+
+// Konvertera github.com blob-URL till raw
+function toGithubRaw(url) {
+  return url
+    .replace("github.com", "raw.githubusercontent.com")
+    .replace("/blob/", "/");
+}
+
+// Thumbnail/förhandsgransknings-URL för bilder
+function fileThumbUrl(url) {
+  if (!url) return url;
+  if (isGdriveUrl(url)) {
+    const id = extractGdriveId(url);
+    return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : url;
+  }
+  if (isGithubUrl(url)) return toGithubRaw(url);
+  return url;
+}
+
+// Stor bild för lightbox
+function fileViewUrl(url) {
+  if (!url) return url;
+  if (isGdriveUrl(url)) {
+    const id = extractGdriveId(url);
+    return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : url;
+  }
+  if (isGithubUrl(url)) return toGithubRaw(url);
+  return url;
+}
+
+// Nedladdnings-URL
+function fileDownloadUrl(url) {
+  if (!url) return url;
+  if (isGdriveUrl(url)) {
+    const id = extractGdriveId(url);
+    return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
+  }
+  if (isGithubUrl(url)) return toGithubRaw(url);
+  return url;
+}
+
+// Öppna i webbläsare
+function fileOpenUrl(url) {
+  if (!url) return url;
+  if (isGdriveUrl(url)) {
+    const id = extractGdriveId(url);
+    return id ? `https://drive.google.com/file/d/${id}/view` : url;
+  }
+  return url; // GitHub och övriga öppnas direkt
+}
+
+// ─── Lightbox ───
+function Lightbox({ src, caption, onClose }) {
+  if (!src) return null;
+  return (
+    <div className="lightbox" onClick={onClose}>
+      <img src={src} alt={caption || "Bild"} />
+      {caption && <div className="lightbox-caption">{caption}</div>}
+    </div>
+  );
+}
+
+// ─── File Card (single file row) ───
+function FileCard({ file, index, onRemove, onPreview }) {
+  const typeDef = getFileTypeDef(file.type || detectFileType(file.name || file.url));
+  const isImage = (file.type || detectFileType(file.name || file.url)) === "image";
+  const driveId = extractGdriveId(file.url);
+
+  return (
+    <div className="file-card">
+      {/* Icon or thumbnail */}
+      {isImage && driveId ? (
+        <img
+          src={fileThumbUrl(file.url)}
+          alt={file.name}
+          style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover", cursor: "pointer", flexShrink: 0, border: "1px solid #E5DDD0" }}
+          onClick={() => onPreview(fileViewUrl(file.url), file.name)}
+          onError={e => { e.target.style.display = "none"; e.target.nextSibling && (e.target.nextSibling.style.display = "flex"); }}
+        />
+      ) : null}
+      <div className="file-icon" style={{ background: typeDef.color, display: (isImage && driveId) ? "none" : "flex" }}>
+        {typeDef.icon}
+      </div>
+
+      {/* Name & meta */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#3A2E22", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</div>
+        <div style={{ fontSize: 10, color: "#A89878" }}>{typeDef.label} • {file.addedAt ? new Date(file.addedAt).toLocaleDateString("sv-SE") : ""}</div>
+      </div>
+
+      {/* Actions */}
+      <div className="file-actions" style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+        {isImage && (
+          <button onClick={() => onPreview(fileViewUrl(file.url), file.name)} title="Förhandsgranska" style={{ color: "#5B7F6E" }}>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" strokeWidth="1.5"/></svg>
+          </button>
+        )}
+        <a href={fileOpenUrl(file.url)} target="_blank" rel="noopener noreferrer" title="Öppna fil" style={{ color: "#5A7A8A" }}>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M11 3h6v6M17 3L9 11M7 5H4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </a>
+        <a href={fileDownloadUrl(file.url)} target="_blank" rel="noopener noreferrer" title="Ladda ner" style={{ color: "#6E7F8D" }}>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 3v10m0 0l-3.5-3.5M10 13l3.5-3.5M3 16h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </a>
+        <button onClick={() => onRemove(index)} title="Ta bort" style={{ color: "#C75B4A" }}>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── File Attachments Section ───
+function FileAttachments({ files, onChange, onPreview }) {
+  const [newUrl, setNewUrl] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState("auto");
+
+  const addFile = () => {
+    if (!newUrl.trim()) return;
+    const autoType = detectFileType(newName.trim() || newUrl.trim());
+    const type = newType === "auto" ? autoType : newType;
+    const name = newName.trim() || `Fil ${files.length + 1}`;
+    onChange([...files, { url: newUrl.trim(), name, type, addedAt: new Date().toISOString() }]);
+    setNewUrl("");
+    setNewName("");
+    setNewType("auto");
+    showToast("Fil tillagd ✓");
+  };
+
+  const removeFile = (idx) => onChange(files.filter((_, i) => i !== idx));
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M10.5 2.5l-6 6a4.24 4.24 0 006 6l6.5-6.5a2.83 2.83 0 00-4-4L6.5 10.5a1.41 1.41 0 002 2L14 7" stroke="#8A7D6B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Bifogade filer ({files.length})
+      </div>
+
+      {/* File list */}
+      {files.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          {files.map((f, i) => (
+            <FileCard key={i} file={f} index={i} onRemove={removeFile} onPreview={onPreview} />
+          ))}
+          {/* Download all */}
+          {files.length > 1 && (
+            <div style={{ textAlign: "right", marginTop: 2 }}>
+              <button
+                onClick={() => { files.forEach((f, i) => { setTimeout(() => { window.open(fileDownloadUrl(f.url), "_blank"); }, i * 500); }); showToast("Laddar ner alla filer…"); }}
+                style={{ fontSize: 11, fontWeight: 700, color: "#5A7A8A", background: "none", border: "1.5px solid #5A7A8A", borderRadius: 6, padding: "5px 12px", cursor: "pointer", transition: "background 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(90,122,138,0.08)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                ↓ Ladda ner alla ({files.length} filer)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add new file */}
+      <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: 8, padding: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "#6B5D4E", marginBottom: 8 }}>Lägg till fil från Google Drive</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <input
+            placeholder="Klistra in Google Drive-länk…"
+            value={newUrl}
+            onChange={e => setNewUrl(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addFile()}
+            style={{ flex: "2 1 180px", padding: "7px 10px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" }}
+          />
+          <input
+            placeholder="Filnamn (t.ex. skrov-foto.jpg)"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addFile()}
+            style={{ flex: "1 1 140px", padding: "7px 10px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" }}
+          />
+          <select
+            value={newType}
+            onChange={e => setNewType(e.target.value)}
+            style={{ flex: "0 0 90px", padding: "7px 6px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit", cursor: "pointer" }}
+          >
+            <option value="auto">Auto</option>
+            <option value="image">Bild</option>
+            <option value="pdf">PDF</option>
+            <option value="cad">CAD</option>
+            <option value="doc">Dokument</option>
+            <option value="other">Övrigt</option>
+          </select>
+          <button
+            onClick={addFile}
+            disabled={!newUrl.trim()}
+            style={{ flex: "0 0 auto", padding: "7px 14px", border: "none", borderRadius: 7, background: newUrl.trim() ? "#5B7F6E" : "#E5DDD0", color: newUrl.trim() ? "#fff" : "#A89878", fontWeight: 700, fontSize: 12, cursor: newUrl.trim() ? "pointer" : "default", whiteSpace: "nowrap" }}
+          >+ Lägg till</button>
+        </div>
+        <div style={{ fontSize: 10, color: "#A89878", marginTop: 6, lineHeight: 1.4 }}>
+          Tips: Högerklicka på filen i Google Drive → "Hämta länk" → klistra in. Se till att delning är "Alla med länken". Skriv filnamn med ändelse (t.ex. <b>ritning.dwg</b>) så identifieras filtypen automatiskt.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Kanban Card ───
+function KanbanCard({ task, phases, onEdit, onDragStart }) {
+  const phase = phases.find(p => p.id === task.phase);
+  const files = task.files || [];
+  const filesByType = {};
+  files.forEach(f => { const t = f.type || "other"; filesByType[t] = (filesByType[t] || 0) + 1; });
+
+  return (
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.setData("taskId", String(task.id)); onDragStart(task.id); }}
+      onClick={() => onEdit(task)}
+      style={{ background: "#FFFDF8", borderRadius: 8, padding: "10px 12px", marginBottom: 8, cursor: "grab", borderLeft: `4px solid ${phase?.color || "#aaa"}`, boxShadow: "0 1px 3px rgba(80,60,40,0.08)", transition: "box-shadow 0.15s, transform 0.15s", fontSize: 13 }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 3px 10px rgba(80,60,40,0.15)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 1px 3px rgba(80,60,40,0.08)"; e.currentTarget.style.transform = "translateY(0)"; }}
+    >
+      <div style={{ fontWeight: 600, color: "#3A2E22", marginBottom: 4, lineHeight: 1.3 }}>{task.title}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", color: phase?.color, textTransform: "uppercase" }}>{phase?.label}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {/* File type badges */}
+          {Object.entries(filesByType).map(([type, count]) => {
+            const def = getFileTypeDef(type);
+            return (
+              <span key={type} style={{ fontSize: 8, fontWeight: 800, background: def.color, color: "#fff", padding: "1px 4px", borderRadius: 3, letterSpacing: "0.03em" }}>
+                {def.icon} {count > 1 ? count : ""}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+      {task.notes && (
+        <div style={{ fontSize: 11, color: "#8A7D6B", marginTop: 4, lineHeight: 1.35, whiteSpace: "pre-wrap" }}>
+          {task.notes.length > 60 ? task.notes.slice(0, 60) + "…" : task.notes}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Kanban Column ───
+function KanbanColumn({ status, tasks, phases, onEdit, onDrop, onDragStart, dragOverStatus, setDragOverStatus }) {
+  return (
+    <div
+      style={{ minWidth: 220, maxWidth: 260, flex: "1 1 220px", background: dragOverStatus === status.id ? "rgba(90,122,138,0.07)" : "transparent", borderRadius: 12, padding: 10, transition: "background 0.2s" }}
+      onDragOver={e => { e.preventDefault(); setDragOverStatus(status.id); }}
+      onDragLeave={() => setDragOverStatus(null)}
+      onDrop={e => { e.preventDefault(); setDragOverStatus(null); onDrop(parseInt(e.dataTransfer.getData("taskId")), status.id); }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, padding: "4px 0", borderBottom: "2px solid #E5DDD0" }}>
+        <span style={{ fontSize: 15 }}>{status.icon}</span>
+        <span style={{ fontWeight: 700, fontSize: 13, color: "#3A2E22", letterSpacing: "0.03em", textTransform: "uppercase" }}>{status.label}</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, background: "#E5DDD0", borderRadius: 10, padding: "1px 8px", color: "#6B5D4E", fontWeight: 600 }}>{tasks.length}</span>
+      </div>
+      <div style={{ minHeight: 40 }}>
+        {tasks.map(t => <KanbanCard key={t.id} task={t} phases={phases} onEdit={onEdit} onDragStart={onDragStart} />)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Task Modal ───
+function TaskModal({ task, onSave, onDelete, onClose, phases, onPreview }) {
+  const [form, setForm] = useState({ ...task, files: task.files || [] });
+  const isNew = !task.id;
+
+  const inputStyle = { width: "100%", padding: "8px 10px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FBF8F2", fontSize: 14, color: "#3A2E22", outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+  const labelStyle = { display: "block", fontSize: 11, fontWeight: 700, color: "#8A7D6B", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4, marginTop: 12 };
+  const btnStyle = { padding: "8px 18px", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: "pointer", letterSpacing: "0.02em" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(40,30,20,0.45)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#FFFDF8", borderRadius: 14, padding: 28, width: 520, maxWidth: "94vw", maxHeight: "92vh", overflow: "auto", boxShadow: "0 12px 40px rgba(40,30,20,0.25)" }}>
+        <h3 style={{ margin: "0 0 18px", fontFamily: "'Playfair Display', Georgia, serif", color: "#3A2E22", fontSize: 20 }}>
+          {isNew ? "Lägg till uppgift" : "Redigera uppgift"}
+        </h3>
+
+        <label style={labelStyle}>Titel</label>
+        <input style={inputStyle} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} autoFocus />
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Fas</label>
+            <select style={inputStyle} value={form.phase} onChange={e => setForm({ ...form, phase: e.target.value })}>
+              {phases.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Startvecka</label>
+            <input type="number" min={1} max={TOTAL_WEEKS} style={inputStyle} value={form.startWeek} onChange={e => setForm({ ...form, startWeek: Math.max(1, +e.target.value) })} />
+          </div>
+          <div>
+            <label style={labelStyle}>Varaktighet (veckor)</label>
+            <input type="number" min={1} max={20} style={inputStyle} value={form.duration} onChange={e => setForm({ ...form, duration: Math.max(1, +e.target.value) })} />
+          </div>
+        </div>
+
+        <label style={labelStyle}>Status</label>
+        <select style={inputStyle} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+          {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+
+        <label style={labelStyle}>Anteckningar</label>
+        <textarea rows={3} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+
+        <FileAttachments files={form.files} onChange={files => setForm({ ...form, files })} onPreview={onPreview} />
+
+        <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
+          {!isNew && <button onClick={() => { onDelete(form.id); onClose(); }} style={{ ...btnStyle, background: "#C75B4A", color: "#fff" }}>Ta bort</button>}
+          <button onClick={onClose} style={{ ...btnStyle, background: "#E5DDD0", color: "#6B5D4E" }}>Avbryt</button>
+          <button onClick={() => { onSave(form); onClose(); }} style={{ ...btnStyle, background: "#5B7F6E", color: "#fff" }} disabled={!form.title.trim()}>{isNew ? "Lägg till" : "Spara"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Gantt Chart ───
+function GanttChart({ tasks, phases, onEdit, filterPhase }) {
+  const filtered = filterPhase === "all" ? tasks : tasks.filter(t => t.phase === filterPhase);
+  const sorted = [...filtered].sort((a, b) => a.startWeek - b.startWeek || a.phase.localeCompare(b.phase));
+  const weekWidth = 46, rowHeight = 34, labelWidth = 250;
+  const today = new Date(), projectStart = new Date(2026, 2, 2);
+  const diffDays = Math.max(0, (today - projectStart) / (1000 * 60 * 60 * 24));
+  const currentWeek = Math.min(TOTAL_WEEKS, 1 + diffDays / 7);
+
+  return (
+    <div style={{ overflow: "auto", borderRadius: 10, border: "1px solid #E5DDD0" }}>
+      <div style={{ display: "flex", minWidth: labelWidth + TOTAL_WEEKS * weekWidth }}>
+        <div style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #E5DDD0", background: "#FAF6EF" }}>
+          <div style={{ height: 36, borderBottom: "1px solid #E5DDD0", padding: "8px 12px", fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Uppgift</div>
+          {sorted.map(t => {
+            const phase = phases.find(p => p.id === t.phase);
+            return (
+              <div key={t.id} onClick={() => onEdit(t)} style={{ height: rowHeight, display: "flex", alignItems: "center", padding: "0 12px", fontSize: 12, fontWeight: 500, color: "#3A2E22", borderBottom: "1px solid #F0EBE2", cursor: "pointer", gap: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: phase?.color, flexShrink: 0 }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{t.title}</span>
+                {(t.files||[]).length > 0 && <span style={{ fontSize: 9, color: "#A89878", flexShrink: 0 }}>📎{(t.files||[]).length}</span>}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ flex: 1, position: "relative" }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #E5DDD0", height: 36 }}>
+            {Array.from({ length: TOTAL_WEEKS }, (_, i) => (
+              <div key={i} style={{ width: weekWidth, flexShrink: 0, textAlign: "center", fontSize: 10, color: "#8A7D6B", padding: "4px 0", borderRight: "1px solid #F0EBE2", lineHeight: 1.2, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ fontWeight: 700 }}>V{i + 1}</div>
+                <div>{getWeekLabel(i + 1)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ position: "relative" }}>
+            <div style={{ position: "absolute", left: (currentWeek - 1) * weekWidth + weekWidth / 2 - 1, top: 0, bottom: 0, width: 2, background: "#C75B4A", opacity: 0.5, zIndex: 5, pointerEvents: "none" }} />
+            {sorted.map(t => {
+              const phase = phases.find(p => p.id === t.phase);
+              const left = (t.startWeek - 1) * weekWidth, width = t.duration * weekWidth - 4;
+              const isDone = t.status === "done", isInProgress = t.status === "in_progress";
+              return (
+                <div key={t.id} style={{ height: rowHeight, position: "relative", borderBottom: "1px solid #F0EBE2" }}>
+                  {Array.from({ length: TOTAL_WEEKS }, (_, i) => <div key={i} style={{ position: "absolute", left: i * weekWidth, top: 0, bottom: 0, width: 1, background: "#F0EBE2" }} />)}
+                  <div onClick={() => onEdit(t)} style={{ position: "absolute", left: left + 2, top: 6, width: Math.max(width, 16), height: rowHeight - 12, background: isDone ? `repeating-linear-gradient(135deg, ${phase?.color}CC, ${phase?.color}CC 4px, ${phase?.color}99 4px, ${phase?.color}99 8px)` : isInProgress ? `linear-gradient(90deg, ${phase?.color}, ${phase?.color}BB)` : `${phase?.color}55`, borderRadius: 5, cursor: "pointer", border: `1.5px solid ${phase?.color}`, transition: "transform 0.12s", display: "flex", alignItems: "center", paddingLeft: 6, overflow: "hidden" }} onMouseEnter={e => e.currentTarget.style.transform = "scaleY(1.15)"} onMouseLeave={e => e.currentTarget.style.transform = "scaleY(1)"}>
+                    {width > 50 && <span style={{ fontSize: 10, fontWeight: 600, color: isDone || isInProgress ? "#fff" : "#3A2E22", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: isDone || isInProgress ? "0 1px 2px rgba(0,0,0,0.2)" : "none" }}>{t.title}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stats ───
+function Stats({ tasks }) {
+  const total = tasks.length;
+  const done = tasks.filter(t => t.status === "done").length;
+  const inProgress = tasks.filter(t => t.status === "in_progress").length;
+  const totalFiles = tasks.reduce((sum, t) => sum + (t.files || []).length, 0);
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const statItems = [
+    { label: "Totalt uppgifter", value: total, color: "#3A2E22" },
+    { label: "Avklarade", value: `${done} (${pct}%)`, color: "#5B7F6E" },
+    { label: "Pågående", value: inProgress, color: "#D4A76A" },
+    { label: "Bifogade filer", value: totalFiles, color: "#5A7A8A" },
+  ];
+
+  return (
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
+      {statItems.map(s => (
+        <div key={s.label} style={{ flex: "1 1 120px", background: "#FFFDF8", borderRadius: 10, padding: "14px 18px", border: "1px solid #E5DDD0" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{s.label}</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: s.color, fontFamily: "'Playfair Display', Georgia, serif" }}>{s.value}</div>
+        </div>
+      ))}
+      <div style={{ flex: "1 1 100%", background: "#FFFDF8", borderRadius: 10, padding: "14px 18px", border: "1px solid #E5DDD0" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Total framdrift</div>
+        <div style={{ height: 10, background: "#E5DDD0", borderRadius: 5, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #5B7F6E, #7BA08A)", borderRadius: 5, transition: "width 0.6s ease" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Image Gallery ───
+function ImageGallery({ onPreview, folders, setFolders }) {
+  const [activeFolder, setActiveFolder] = useState(null);
+  const [addingImage, setAddingImage] = useState(false);
+  const [newUrl, setNewUrl] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [editingFolderId, setEditingFolderId] = useState(null);
+  const [editFolderName, setEditFolderName] = useState("");
+
+  const active = folders.find(f => f.id === activeFolder);
+
+  const addImage = () => {
+    if (!newUrl.trim() || !activeFolder) return;
+    const name = newName.trim() || `Bild ${(active?.images?.length || 0) + 1}`;
+    setFolders(prev => prev.map(f => f.id === activeFolder ? { ...f, images: [...f.images, { url: newUrl.trim(), name, addedAt: new Date().toISOString() }] } : f));
+    setNewUrl(""); setNewName(""); setAddingImage(false);
+    showToast("Bild tillagd ✓");
+  };
+
+  const removeImage = (imgIdx) => {
+    setFolders(prev => prev.map(f => f.id === activeFolder ? { ...f, images: f.images.filter((_, i) => i !== imgIdx) } : f));
+    showToast("Bild borttagen");
+  };
+
+  const addFolder = () => {
+    if (!newFolderName.trim()) return;
+    const id = newFolderName.trim().toLowerCase().replace(/[^a-zåäö0-9]/g, "_") + "_" + Date.now();
+    setFolders(prev => [...prev, { id, name: newFolderName.trim(), icon: "📁", images: [] }]);
+    setNewFolderName(""); setShowNewFolder(false); setActiveFolder(id);
+    showToast("Mapp skapad ✓");
+  };
+
+  const removeFolder = (folderId) => {
+    const folder = folders.find(f => f.id === folderId);
+    if (!confirm(`Ta bort mappen "${folder?.name}" och alla dess ${folder?.images?.length || 0} bilder?`)) return;
+    setFolders(prev => prev.filter(f => f.id !== folderId));
+    if (activeFolder === folderId) setActiveFolder(null);
+    showToast("Mapp borttagen");
+  };
+
+  const renameFolder = (folderId) => {
+    if (!editFolderName.trim()) { setEditingFolderId(null); return; }
+    setFolders(prev => prev.map(f => f.id === folderId ? { ...f, name: editFolderName.trim() } : f));
+    setEditingFolderId(null); setEditFolderName("");
+    showToast("Mapp omdöpt ✓");
+  };
+
+  const totalImages = folders.reduce((s, f) => s + f.images.length, 0);
+
+  const inputStyle = { padding: "8px 10px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FBF8F2", fontSize: 13, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
+
+  return (
+    <div>
+      {/* Header bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <h2 style={{ margin: 0, fontFamily: "'Playfair Display', Georgia, serif", color: "#3A2E22", fontSize: 22 }}>Bildarkiv</h2>
+          <p style={{ margin: "4px 0 0", fontSize: 12, color: "#8A7D6B" }}>{folders.length} mappar • {totalImages} bilder totalt</p>
+        </div>
+        {!showNewFolder ? (
+          <button onClick={() => setShowNewFolder(true)} style={{ padding: "8px 16px", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>+ Ny mapp</button>
+        ) : (
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input placeholder="Mappnamn…" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} onKeyDown={e => e.key === "Enter" && addFolder()} style={{ ...inputStyle, width: 160 }} autoFocus />
+            <button onClick={addFolder} disabled={!newFolderName.trim()} style={{ padding: "8px 14px", background: newFolderName.trim() ? "#5B7F6E" : "#E5DDD0", color: newFolderName.trim() ? "#fff" : "#A89878", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 12, cursor: newFolderName.trim() ? "pointer" : "default" }}>Skapa</button>
+            <button onClick={() => { setShowNewFolder(false); setNewFolderName(""); }} style={{ padding: "8px 10px", background: "none", border: "none", color: "#8A7D6B", cursor: "pointer", fontSize: 13 }}>✕</button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 20, minHeight: 400 }}>
+        {/* Sidebar folders */}
+        <div style={{ width: 220, flexShrink: 0 }}>
+          {folders.map(f => (
+            <div key={f.id}
+              onClick={() => setActiveFolder(f.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
+                borderRadius: 10, cursor: "pointer", marginBottom: 4,
+                background: activeFolder === f.id ? "#FFFDF8" : "transparent",
+                border: activeFolder === f.id ? "1.5px solid #E5DDD0" : "1.5px solid transparent",
+                boxShadow: activeFolder === f.id ? "0 2px 8px rgba(80,60,40,0.06)" : "none",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { if (activeFolder !== f.id) e.currentTarget.style.background = "rgba(255,253,248,0.5)"; }}
+              onMouseLeave={e => { if (activeFolder !== f.id) e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{ fontSize: 20 }}>{f.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {editingFolderId === f.id ? (
+                  <input value={editFolderName} onChange={e => setEditFolderName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") renameFolder(f.id); if (e.key === "Escape") setEditingFolderId(null); }} onBlur={() => renameFolder(f.id)} style={{ ...inputStyle, width: "100%", padding: "3px 6px", fontSize: 13 }} autoFocus onClick={e => e.stopPropagation()} />
+                ) : (
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#3A2E22", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                )}
+                <div style={{ fontSize: 10, color: "#A89878" }}>{f.images.length} bilder</div>
+              </div>
+              {activeFolder === f.id && editingFolderId !== f.id && (
+                <div style={{ display: "flex", gap: 2 }} onClick={e => e.stopPropagation()}>
+                  <button onClick={() => { setEditingFolderId(f.id); setEditFolderName(f.name); }} title="Byt namn" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#8A7D6B", padding: 2 }}>✎</button>
+                  <button onClick={() => removeFolder(f.id)} title="Ta bort mapp" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#C75B4A", padding: 2 }}>✕</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Image grid area */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {!activeFolder ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300, color: "#A89878", fontSize: 14, flexDirection: "column", gap: 8 }}>
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect x="6" y="10" width="36" height="28" rx="4" stroke="#C4B89E" strokeWidth="2"/><circle cx="18" cy="22" r="4" stroke="#C4B89E" strokeWidth="1.5"/><path d="M6 32l10-8 6 5 8-10 12 13" stroke="#C4B89E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <span>Välj en mapp till vänster för att se bilder</span>
+            </div>
+          ) : (
+            <div>
+              {/* Folder header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 24 }}>{active?.icon}</span>
+                  <h3 style={{ margin: 0, fontFamily: "'Playfair Display', Georgia, serif", color: "#3A2E22", fontSize: 18 }}>{active?.name}</h3>
+                  <span style={{ fontSize: 12, color: "#A89878", marginLeft: 4 }}>({active?.images?.length || 0})</span>
+                </div>
+                <button onClick={() => setAddingImage(true)} style={{ padding: "7px 14px", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>+ Lägg till bild</button>
+              </div>
+
+              {/* Add image form */}
+              {addingImage && (
+                <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input placeholder="Google Drive-länk…" value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === "Enter" && addImage()} style={{ ...inputStyle, flex: "2 1 200px" }} autoFocus />
+                    <input placeholder="Bildnamn (valfritt)…" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === "Enter" && addImage()} style={{ ...inputStyle, flex: "1 1 140px" }} />
+                    <button onClick={addImage} disabled={!newUrl.trim()} style={{ padding: "8px 16px", background: newUrl.trim() ? "#5B7F6E" : "#E5DDD0", color: newUrl.trim() ? "#fff" : "#A89878", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 12, cursor: newUrl.trim() ? "pointer" : "default" }}>Lägg till</button>
+                    <button onClick={() => { setAddingImage(false); setNewUrl(""); setNewName(""); }} style={{ padding: "8px 10px", background: "none", border: "none", color: "#8A7D6B", cursor: "pointer", fontSize: 14 }}>✕</button>
+                  </div>
+                  <div style={{ fontSize: 10, color: "#A89878", marginTop: 6 }}>
+                    Klistra in en Google Drive-delningslänk. Se till att filen är delad med "Alla med länken".
+                  </div>
+                </div>
+              )}
+
+              {/* Image grid */}
+              {active?.images?.length === 0 ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: "#A89878", fontSize: 13, flexDirection: "column", gap: 8, background: "#FAF6EF", borderRadius: 10, border: "1.5px dashed #E5DDD0" }}>
+                  <span>Inga bilder ännu</span>
+                  <button onClick={() => setAddingImage(true)} style={{ padding: "6px 14px", background: "none", border: "1.5px solid #C4B89E", borderRadius: 6, color: "#6B5D4E", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Lägg till den första bilden</button>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
+                  {active.images.map((img, idx) => {
+                    const driveId = extractGdriveId(img.url);
+                    return (
+                      <div key={idx} style={{ background: "#FFFDF8", borderRadius: 10, border: "1.5px solid #E5DDD0", overflow: "hidden", transition: "box-shadow 0.15s, transform 0.15s" }}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(80,60,40,0.12)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "translateY(0)"; }}
+                      >
+                        {/* Thumbnail */}
+                        <div
+                          onClick={() => onPreview(fileViewUrl(img.url), img.name)}
+                          style={{ width: "100%", height: 140, background: "#F0EBE2", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-in", overflow: "hidden", position: "relative" }}
+                        >
+                          {driveId ? (
+                            <img src={fileThumbUrl(img.url)} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
+                          ) : (
+                            <span style={{ color: "#A89878", fontSize: 12 }}>Förhandsgranskning ej tillgänglig</span>
+                          )}
+                        </div>
+                        {/* Info */}
+                        <div style={{ padding: "10px 12px" }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#3A2E22", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 4 }}>{img.name}</div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 10, color: "#A89878" }}>{img.addedAt ? new Date(img.addedAt).toLocaleDateString("sv-SE") : ""}</span>
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <a href={fileOpenUrl(img.url)} target="_blank" rel="noopener noreferrer" title="Öppna fil" style={{ color: "#5A7A8A", fontSize: 11, fontWeight: 600, textDecoration: "none", padding: "2px 4px", borderRadius: 4, transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.05)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M11 3h6v6M17 3L9 11M7 5H4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                              </a>
+                              <a href={fileDownloadUrl(img.url)} target="_blank" rel="noopener noreferrer" title="Ladda ner" style={{ color: "#6E7F8D", fontSize: 11, fontWeight: 600, textDecoration: "none", padding: "2px 4px", borderRadius: 4, transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.05)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M10 3v10m0 0l-3.5-3.5M10 13l3.5-3.5M3 16h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                              </a>
+                              <button onClick={() => removeImage(idx)} title="Ta bort" style={{ color: "#C75B4A", background: "none", border: "none", cursor: "pointer", padding: "2px 4px", borderRadius: 4, transition: "background 0.15s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.05)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Rhino 3D Viewer ───
+function Rhino3DViewer() {
+  const containerRef = useRef(null);
+  const rendererRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const animRef = useRef(null);
+  const isDragging = useRef(false);
+  const isPanning = useRef(false);
+  const prevMouse = useRef({ x: 0, y: 0 });
+  const rotation = useRef({ x: 0.5, y: -0.8 }); // elevation, azimuth (Z-up perspective)
+  const panOffset = useRef(new THREE.Vector3(0, 0, 0));
+  const zoomRef = useRef(1);
+
+  const [status, setStatus] = useState("idle"); // idle | loading | ready | error
+  const [errorMsg, setErrorMsg] = useState("");
+  const [driveUrl, setDriveUrl] = useState("");
+  const [modelInfo, setModelInfo] = useState(null);
+  const [rhinoModule, setRhinoModule] = useState(null);
+  const [layers, setLayers] = useState([]); // [{ name, color, visible, index }]
+  const sceneObjects = useRef([]); // [{ threeObj, layerIndex }]
+
+  // Load rhino3dm WASM module on mount
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/rhino3dm.min.js";
+    script.onload = () => {
+      if (window.rhino3dm) {
+        window.rhino3dm().then(m => { setRhinoModule(m); });
+      }
+    };
+    document.head.appendChild(script);
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  }, []);
+
+  // Initialize Three.js scene
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const w = containerRef.current.clientWidth;
+    const h = containerRef.current.clientHeight || 500;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xF5F0E6);
+
+    const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 10000);
+    camera.up.set(0, 0, 1); // Z-up like Rhino
+    camera.position.set(30, -40, 30);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    containerRef.current.appendChild(renderer.domElement);
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(50, 50, 80);
+    scene.add(dirLight);
+    const dirLight2 = new THREE.DirectionalLight(0xD4A76A, 0.3);
+    dirLight2.position.set(-30, -40, -20);
+    scene.add(dirLight2);
+
+    // Grid on XY plane (Z-up, like Rhino)
+    const grid = new THREE.GridHelper(100, 20, 0xDDD5C8, 0xE5DDD0);
+    grid.rotation.x = Math.PI / 2; // rotate to XY plane
+    scene.add(grid);
+
+    sceneRef.current = scene;
+    cameraRef.current = camera;
+    rendererRef.current = renderer;
+
+    const animate = () => {
+      animRef.current = requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Raycaster for finding orbit pivot point
+    const raycaster = new THREE.Raycaster();
+    const mouseNdc = new THREE.Vector2();
+    let pendingPivot = null;
+
+    function findPivotAt(clientX, clientY) {
+      const rect = el.getBoundingClientRect();
+      mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouseNdc, camera);
+      const meshes = [];
+      scene.traverse(child => { if (child.isMesh && child.visible) meshes.push(child); });
+      const hits = raycaster.intersectObjects(meshes, false);
+      if (hits.length > 0) return hits[0].point.clone();
+      return null;
+    }
+
+    function applyPivot(pivot) {
+      const cam = cameraRef.current;
+      if (!cam || !pivot) return;
+      const offset = cam.position.clone().sub(pivot);
+      const dist = offset.length();
+      if (dist < 0.001) return;
+      zoomRef.current = dist / 50;
+      rotation.current.x = Math.asin(Math.max(-0.999, Math.min(0.999, offset.z / dist)));
+      rotation.current.y = Math.atan2(offset.y, offset.x);
+      panOffset.current.copy(pivot);
+      // Don't call updateCamera here — angles already match current position
+    }
+
+    // Mouse/touch controls: left=rotate, middle=pan, scroll=zoom
+    const el = renderer.domElement;
+    const onDown = (e) => {
+      if (e.touches) {
+        isDragging.current = true;
+        const pt = e.touches[0];
+        prevMouse.current = { x: pt.clientX, y: pt.clientY };
+        pendingPivot = findPivotAt(pt.clientX, pt.clientY);
+      } else if (e.button === 1 || e.button === 2) {
+        e.preventDefault();
+        isPanning.current = true;
+        prevMouse.current = { x: e.clientX, y: e.clientY };
+      } else {
+        isDragging.current = true;
+        prevMouse.current = { x: e.clientX, y: e.clientY };
+        pendingPivot = findPivotAt(e.clientX, e.clientY);
+      }
+    };
+    const onMove = (e) => {
+      const pt = e.touches ? e.touches[0] : e;
+      const dx = pt.clientX - prevMouse.current.x;
+      const dy = pt.clientY - prevMouse.current.y;
+      prevMouse.current = { x: pt.clientX, y: pt.clientY };
+
+      if (isPanning.current) {
+        // Pan in camera screen space
+        const panSpeed = 0.002 * 50 * zoomRef.current;
+        const cam = cameraRef.current;
+        if (cam) {
+          const right = new THREE.Vector3();
+          const up = new THREE.Vector3();
+          right.setFromMatrixColumn(cam.matrixWorld, 0);
+          up.setFromMatrixColumn(cam.matrixWorld, 1);
+          panOffset.current.addScaledVector(right, -dx * panSpeed);
+          panOffset.current.addScaledVector(up, dy * panSpeed);
+        }
+        updateCamera();
+      } else if (isDragging.current) {
+        // Apply pivot on first movement — no jump since angles match current camera pos
+        if (pendingPivot) {
+          applyPivot(pendingPivot);
+          pendingPivot = null;
+        }
+        // Rotate
+        rotation.current.y += dx * 0.005;
+        rotation.current.x += dy * 0.005;
+        rotation.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotation.current.x));
+        updateCamera();
+      }
+    };
+    const onUp = () => { isDragging.current = false; isPanning.current = false; pendingPivot = null; };
+    const onWheel = (e) => { e.preventDefault(); zoomRef.current = Math.max(0.05, Math.min(50, zoomRef.current * (1 + e.deltaY * 0.001))); updateCamera(); };
+    const onContextMenu = (e) => { e.preventDefault(); }; // prevent right-click menu
+
+    el.addEventListener("mousedown", onDown);
+    el.addEventListener("mousemove", onMove);
+    el.addEventListener("mouseup", onUp);
+    el.addEventListener("mouseleave", onUp);
+    el.addEventListener("touchstart", onDown, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchend", onUp);
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("contextmenu", onContextMenu);
+
+    const onResize = () => {
+      if (!containerRef.current || !containerRef.current.parentElement) return;
+      const nw = containerRef.current.parentElement.clientWidth;
+      const nh = containerRef.current.parentElement.clientHeight || 500;
+      camera.aspect = nw / nh;
+      camera.updateProjectionMatrix();
+      renderer.setSize(nw, nh);
+    };
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      window.removeEventListener("resize", onResize);
+      renderer.dispose();
+    };
+  }, []);
+
+  function updateCamera() {
+    if (!cameraRef.current || !sceneRef.current) return;
+    const dist = 50 * zoomRef.current;
+    const elevation = rotation.current.x; // up/down angle from XY plane
+    const azimuth = rotation.current.y;   // rotation around Z axis
+    const target = panOffset.current;
+    cameraRef.current.position.set(
+      target.x + dist * Math.cos(elevation) * Math.cos(azimuth),
+      target.y + dist * Math.cos(elevation) * Math.sin(azimuth),
+      target.z + dist * Math.sin(elevation)
+    );
+    cameraRef.current.lookAt(target);
+  }
+
+  function clearModel() {
+    if (!sceneRef.current) return;
+    const toRemove = [];
+    sceneRef.current.traverse(child => { if (child.isMesh || child.isLine) toRemove.push(child); });
+    toRemove.forEach(obj => { sceneRef.current.remove(obj); if (obj.geometry) obj.geometry.dispose(); if (obj.material) obj.material.dispose(); });
+  }
+
+  async function loadFromDrive() {
+    if (!driveUrl.trim()) return;
+    if (!rhinoModule) { setErrorMsg("rhino3dm laddas fortfarande, vänta en stund…"); return; }
+
+    setStatus("loading");
+    setErrorMsg("");
+    setModelInfo(null);
+
+    try {
+      // Build fetch URL — GitHub raw doesn't need proxy, Drive does
+      let fetchUrl;
+      if (isGithubUrl(driveUrl.trim())) {
+        fetchUrl = toGithubRaw(driveUrl.trim());
+      } else if (isGdriveUrl(driveUrl.trim())) {
+        if (!isProxyConfigured()) { setErrorMsg("CORS-proxy ej konfigurerad. Fyll i CORS_PROXY_URL i koden."); setStatus("error"); return; }
+        const patterns = [/\/file\/d\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/, /\/d\/([a-zA-Z0-9_-]+)/];
+        let fileId = null;
+        for (const p of patterns) { const m = driveUrl.match(p); if (m) { fileId = m[1]; break; } }
+        if (!fileId) throw new Error("Ogiltig Google Drive-länk");
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        fetchUrl = `${CORS_PROXY_URL}?url=${encodeURIComponent(downloadUrl)}`;
+      } else {
+        // Generic URL — try direct first, fall back to proxy
+        fetchUrl = isProxyConfigured()
+          ? `${CORS_PROXY_URL}?url=${encodeURIComponent(driveUrl.trim())}`
+          : driveUrl.trim();
+      }
+
+      const res = await fetch(fetchUrl);
+      if (!res.ok) throw new Error(`Nedladdningsfel: HTTP ${res.status}`);
+
+      const buffer = await res.arrayBuffer();
+      const arr = new Uint8Array(buffer);
+
+      // Verify it's a .3dm file
+      const headerStr = new TextDecoder().decode(arr.slice(0, 20));
+      if (!headerStr.startsWith("3D Geometry File")) {
+        throw new Error("Filen verkar inte vara en giltig .3dm-fil. Kontrollera att Google Drive-delningen är 'Alla med länken'.");
+      }
+
+      // Parse .3dm file
+      const doc = rhinoModule.File3dm.fromByteArray(arr);
+      if (!doc) throw new Error("Kunde inte läsa .3dm-filen — filen kan vara skadad eller i ett format som inte stöds");
+
+      clearModel();
+      sceneObjects.current = [];
+
+      // Extract layers and their visibility
+      const rhinoLayers = doc.layers();
+      const layerInfo = [];
+      const visibleLayerIndices = new Set();
+      for (let li = 0; li < rhinoLayers.count; li++) {
+        const layer = rhinoLayers.get(li);
+        const name = layer.name || `Lager ${li}`;
+        const visible = layer.visible;
+        const color = layer.color;
+        const colorHex = color ? `rgb(${color.r},${color.g},${color.b})` : "#8B7355";
+        layerInfo.push({ name, color: colorHex, visible, index: li });
+        if (visible) visibleLayerIndices.add(li);
+        console.log(`Lager ${li}: "${name}" visible=${visible} color=rgb(${color?.r},${color?.g},${color?.b})`);
+      }
+      setLayers(layerInfo);
+
+      const objects = doc.objects();
+      let meshCount = 0, curveCount = 0, skippedCount = 0;
+      const defaultMat = new THREE.MeshPhongMaterial({ color: 0x8B7355, side: THREE.DoubleSide, flatShading: false });
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x5A4A38 });
+      const allPositions = [];
+
+      console.log(`Rhino fil laddad: ${objects.count} objekt`);
+
+      for (let i = 0; i < objects.count; i++) {
+        try {
+          const rhinoObj = objects.get(i);
+          const geo = rhinoObj.geometry();
+          if (!geo) { skippedCount++; continue; }
+
+          // Check layer visibility — load all objects but hide those on hidden layers
+          const attr = rhinoObj.attributes();
+          const layerIndex = attr.layerIndex;
+          const layerVisible = visibleLayerIndices.has(layerIndex);
+
+          const objectType = geo.objectType;
+          const typeName = geo.constructor.name;
+          console.log(`Objekt ${i}: type=${objectType}, constructor=${typeName}`);
+
+          // Detect type using multiple methods (objectType can be number or enum object)
+          const typeNum = typeof objectType === "number" ? objectType : parseInt(String(objectType));
+          const isMesh = typeNum === 32 || typeName === "Mesh";
+          const isBrep = typeNum === 16 || typeName === "Brep";
+          const isExtrusion = typeNum === 1073741824 || typeName === "Extrusion";
+          const isSurface = typeNum === 8 || typeName === "Surface" || typeName === "NurbsSurface";
+          const isSubD = typeNum === 256 || typeName === "SubD";
+          const isCurve = typeNum === 4 || typeName === "NurbsCurve" || typeName === "LineCurve" || typeName === "PolylineCurve" || typeName === "ArcCurve" || typeName === "Curve";
+
+          // Try to get a mesh from any geometry type
+          let rhinoMesh = null;
+
+          if (isMesh) {
+            rhinoMesh = geo;
+          } else if (isExtrusion) {
+            try {
+              const brep = geo.toBrep ? geo.toBrep() : null;
+              if (brep) {
+                const faceCount = brep.faces().count;
+                for (let fi = 0; fi < faceCount; fi++) {
+                  const face = brep.faces().get(fi);
+                  const faceMesh = face.getMesh(rhinoModule.MeshType.Any);
+                  if (faceMesh) { addMeshToScene(faceMesh, rhinoObj, doc, layerVisible); meshCount++; }
+                }
+                brep.delete();
+                continue;
+              }
+            } catch(e) { console.log("Extrusion conversion failed:", e); }
+          } else if (isBrep) {
+            try {
+              const faceCount = geo.faces().count;
+              console.log(`  Brep har ${faceCount} faces`);
+              let gotMesh = false;
+              for (let fi = 0; fi < faceCount; fi++) {
+                const face = geo.faces().get(fi);
+                try {
+                  const faceMesh = face.getMesh(rhinoModule.MeshType.Any);
+                  if (faceMesh) { addMeshToScene(faceMesh, rhinoObj, doc, layerVisible); meshCount++; gotMesh = true; }
+                  else { console.log(`  Face ${fi}: getMesh returned null — prova att använda "Mesh" i Rhino innan export`); }
+                } catch(faceErr) { console.log(`  Face ${fi} getMesh error:`, faceErr); }
+              }
+              if (gotMesh) continue;
+              // Fallback: try toMesh on the brep directly
+              console.log("  Försöker toMesh() på hela Brep:en...");
+            } catch(e) { console.log("Brep face mesh extraction failed:", e); }
+          } else if (isSurface) {
+            try {
+              const brep = geo.toBrep ? geo.toBrep() : null;
+              if (brep) {
+                const faceCount = brep.faces().count;
+                for (let fi = 0; fi < faceCount; fi++) {
+                  const face = brep.faces().get(fi);
+                  const faceMesh = face.getMesh(rhinoModule.MeshType.Any);
+                  if (faceMesh) { addMeshToScene(faceMesh, rhinoObj, doc, layerVisible); meshCount++; }
+                }
+                brep.delete();
+                continue;
+              }
+            } catch(e) { console.log("Surface conversion failed:", e); }
+          } else if (isSubD) {
+            try { if (geo.toMesh) rhinoMesh = geo.toMesh(0); } catch(e) { console.log("SubD conversion failed:", e); }
+          }
+
+          // Handle direct mesh
+          if (rhinoMesh) {
+            addMeshToScene(rhinoMesh, rhinoObj, doc, layerVisible);
+            meshCount++;
+            continue;
+          }
+
+          // Last resort: try generic toMesh or createMesh
+          if (!isCurve) {
+            try {
+              if (typeof geo.toMesh === "function") {
+                const fallbackMesh = geo.toMesh();
+                if (fallbackMesh) {
+                  console.log(`  Fallback toMesh() lyckades för objekt ${i}`);
+                  addMeshToScene(fallbackMesh, rhinoObj, doc, layerVisible);
+                  meshCount++;
+                  continue;
+                }
+              }
+            } catch(e) { console.log("  Fallback toMesh failed:", e); }
+
+            // Try to extract edges as wireframe
+            try {
+              if (isBrep && geo.edges) {
+                const edges = geo.edges();
+                console.log(`  Försöker extrahera ${edges.count} kanter som wireframe...`);
+                for (let ei = 0; ei < edges.count; ei++) {
+                  try {
+                    const edge = edges.get(ei);
+                    const edgeCurve = edge.toNurbsCurve ? edge.toNurbsCurve() : edge.edgeCurve;
+                    if (edgeCurve) {
+                      addCurveToScene(edgeCurve, rhinoObj, layerVisible);
+                      curveCount++;
+                    }
+                  } catch(ee) { /* skip individual edge */ }
+                }
+                continue;
+              }
+            } catch(e) { console.log("  Edge extraction failed:", e); }
+          }
+
+          // Handle curves
+          if (isCurve) {
+            try {
+              addCurveToScene(geo, rhinoObj, layerVisible);              curveCount++;
+              continue;
+            } catch(e) { console.log("Curve parsing failed:", e); }
+          }
+
+          // Handle point objects, annotations etc — skip silently
+          skippedCount++;
+
+        } catch (objErr) {
+          console.warn(`Kunde inte läsa objekt ${i}:`, objErr);
+          skippedCount++;
+        }
+      }
+
+      function addMeshToScene(rhinoMesh, rhinoObj, doc, isVisible) {
+        try {
+          const verts = rhinoMesh.vertices();
+          const faces = rhinoMesh.faces();
+          if (!verts || verts.count === 0) return;
+
+          const positions = [];
+          for (let v = 0; v < verts.count; v++) {
+            const pt = verts.get(v);
+            // pt can be [x,y,z] or {x,y,z} depending on version
+            const x = pt[0] !== undefined ? pt[0] : pt.x;
+            const y = pt[1] !== undefined ? pt[1] : pt.y;
+            const z = pt[2] !== undefined ? pt[2] : pt.z;
+            positions.push(x, y, z);
+            allPositions.push(x, y, z);
+          }
+
+          const indices = [];
+          for (let f = 0; f < faces.count; f++) {
+            const face = faces.get(f);
+            // face can be [a,b,c,d] array or object with A,B,C,D
+            let a, b, c, d;
+            if (Array.isArray(face)) {
+              [a, b, c, d] = face;
+            } else {
+              a = face[0] !== undefined ? face[0] : 0;
+              b = face[1] !== undefined ? face[1] : 0;
+              c = face[2] !== undefined ? face[2] : 0;
+              d = face[3] !== undefined ? face[3] : c;
+            }
+            indices.push(a, b, c);
+            if (d !== c) indices.push(a, c, d); // quad → two triangles
+          }
+
+          if (positions.length === 0 || indices.length === 0) return;
+
+          const geom = new THREE.BufferGeometry();
+          geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+          geom.setIndex(indices);
+          geom.computeVertexNormals();
+
+          // Try to get object color
+          let objMat = defaultMat;
+          try {
+            const attr = rhinoObj.attributes();
+            const color = attr.drawColor(doc);
+            if (color && (color.r + color.g + color.b > 0)) {
+              objMat = new THREE.MeshPhongMaterial({
+                color: new THREE.Color(color.r / 255, color.g / 255, color.b / 255),
+                side: THREE.DoubleSide, flatShading: false,
+              });
+            }
+          } catch(e) { /* use default material */ }
+
+          const mesh3 = new THREE.Mesh(geom, objMat);
+          mesh3.userData.layerIndex = rhinoObj.attributes().layerIndex;
+          mesh3.visible = isVisible !== false;
+          sceneRef.current.add(mesh3);
+          sceneObjects.current.push({ threeObj: mesh3, layerIndex: mesh3.userData.layerIndex });
+        } catch(e) { console.warn("addMeshToScene failed:", e); }
+      }
+
+      function addCurveToScene(geo, rhinoObj, isVisible) {
+        const pts = [];
+        try {
+          // Try different curve approaches
+          let curve = geo;
+          if (geo.toNurbsCurve) {
+            try { curve = geo.toNurbsCurve(); } catch(e) { curve = geo; }
+          }
+
+          // Try to get points via pointAt for smooth sampling
+          if (curve.domain && typeof curve.pointAt === "function") {
+            const domain = curve.domain;
+            const steps = 50;
+            for (let s = 0; s <= steps; s++) {
+              const t = domain[0] + (domain[1] - domain[0]) * (s / steps);
+              const pt = curve.pointAt(t);
+              if (pt) {
+                const x = pt[0] !== undefined ? pt[0] : pt.x;
+                const y = pt[1] !== undefined ? pt[1] : pt.y;
+                const z = pt[2] !== undefined ? pt[2] : pt.z;
+                pts.push(new THREE.Vector3(x, y, z));
+                allPositions.push(x, y, z);
+              }
+            }
+          }
+
+          // Fallback: control points
+          if (pts.length < 2 && curve.points) {
+            const cp = curve.points();
+            for (let p = 0; p < cp.count; p++) {
+              const pt = cp.get(p);
+              const x = pt[0] !== undefined ? pt[0] : pt.x;
+              const y = pt[1] !== undefined ? pt[1] : pt.y;
+              const z = pt[2] !== undefined ? pt[2] : pt.z;
+              pts.push(new THREE.Vector3(x, y, z));
+              allPositions.push(x, y, z);
+            }
+          }
+        } catch(e) { console.log("curve point extraction failed:", e); }
+
+        if (pts.length > 1) {
+          const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+          const line = new THREE.Line(lineGeo, lineMat);
+          line.visible = isVisible !== false;
+          if (rhinoObj) {
+            line.userData.layerIndex = rhinoObj.attributes().layerIndex;
+            sceneObjects.current.push({ threeObj: line, layerIndex: line.userData.layerIndex });
+          }
+          sceneRef.current.add(line);
+        }
+      }
+
+      // Auto-fit camera to model
+      if (allPositions.length > 0) {
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        for (let i = 0; i < allPositions.length; i += 3) {
+          minX = Math.min(minX, allPositions[i]); maxX = Math.max(maxX, allPositions[i]);
+          minY = Math.min(minY, allPositions[i+1]); maxY = Math.max(maxY, allPositions[i+1]);
+          minZ = Math.min(minZ, allPositions[i+2]); maxZ = Math.max(maxZ, allPositions[i+2]);
+        }
+        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+        const size = Math.max(maxX - minX, maxY - minY, maxZ - minZ) || 10;
+
+        // Center all objects
+        sceneRef.current.traverse(child => { if (child.isMesh || child.isLine) child.position.set(-cx, -cy, -cz); });
+
+        panOffset.current.set(0, 0, 0);
+        zoomRef.current = Math.max(0.5, size / 40);
+        updateCamera();
+      }
+
+      setModelInfo({ meshes: meshCount, curves: curveCount, objects: objects.count, skipped: skippedCount });
+      setStatus(meshCount + curveCount > 0 ? "ready" : "error");
+      if (meshCount + curveCount === 0) {
+        setErrorMsg(`Filen lästes men inga synliga objekt hittades (${objects.count} objekt, ${skippedCount} överhoppade). Öppna webbkonsolen (F12) för detaljer.`);
+      }
+      doc.delete();
+    } catch (e) {
+      console.error("3D-laddningsfel:", e);
+      setErrorMsg(e.message || "Okänt fel vid laddning");
+      setStatus("error");
+    }
+  }
+
+  const inputStyle = { padding: "9px 12px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 13, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
+
+  function toggleLayer(index) {
+    setLayers(prev => {
+      const updated = prev.map(l => l.index === index ? { ...l, visible: !l.visible } : l);
+      const vis = updated.find(l => l.index === index)?.visible;
+      sceneObjects.current.forEach(o => {
+        if (o.layerIndex === index) o.threeObj.visible = vis;
+      });
+      return updated;
+    });
+  }
+
+  return (
+    <div>
+      {/* URL input */}
+      <div style={{ background: "#FFFDF8", borderRadius: 10, padding: 18, border: "1px solid #E5DDD0", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            Ladda Rhino 3D-modell — GitHub raw eller Google Drive
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            placeholder="Klistra in GitHub raw-länk eller Google Drive-länk till .3dm-fil…"
+            value={driveUrl}
+            onChange={e => setDriveUrl(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && loadFromDrive()}
+            style={{ ...inputStyle, flex: "1 1 300px" }}
+          />
+          <button
+            onClick={loadFromDrive}
+            disabled={!driveUrl.trim() || status === "loading"}
+            style={{
+              padding: "9px 20px", border: "none", borderRadius: 7,
+              background: driveUrl.trim() && status !== "loading" ? "#5A7A8A" : "#E5DDD0",
+              color: driveUrl.trim() && status !== "loading" ? "#fff" : "#A89878",
+              fontWeight: 700, fontSize: 13, cursor: driveUrl.trim() ? "pointer" : "default",
+            }}
+          >
+            {status === "loading" ? "Laddar…" : "Visa 3D-modell"}
+          </button>
+        </div>
+        {!isProxyConfigured() && (
+          <div style={{ marginTop: 8, padding: "8px 12px", background: "#FFF3E0", borderRadius: 6, fontSize: 11, color: "#8B5E3C", lineHeight: 1.4 }}>
+            ⚠ CORS-proxy ej konfigurerad. Du behöver deploya en Cloudflare Worker och fylla i <code>CORS_PROXY_URL</code> i koden. Se filen <b>cloudflare-worker.js</b> för instruktioner.
+          </div>
+        )}
+        {status === "error" && <div style={{ marginTop: 8, fontSize: 12, color: "#C75B4A", fontWeight: 600 }}>✗ {errorMsg}</div>}
+        {modelInfo && (
+          <div style={{ marginTop: 8, fontSize: 11, color: "#5B7F6E", fontWeight: 600 }}>
+            ✓ Modell laddad — {modelInfo.meshes} ytor, {modelInfo.curves} kurvor ({modelInfo.objects} objekt totalt{modelInfo.skipped > 0 ? `, ${modelInfo.skipped} överhoppade` : ""})
+          </div>
+        )}
+        <div style={{ marginTop: 6, fontSize: 10, color: "#A89878" }}>
+          Vänster mus: rotera • Mittenknapp/högerklick: panorera • Scrolla: zooma • Stödjer .3dm-filer (Rhino 3D)
+        </div>
+      </div>
+
+      {/* 3D viewport */}
+      <div style={{ position: "relative", width: "100%", height: "calc(100vh - 220px)", minHeight: 400, borderRadius: 10, border: "1px solid #E5DDD0", overflow: "hidden", background: "#F5F0E6", cursor: "grab" }}>
+        <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+        {status === "loading" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(245,240,230,0.8)", zIndex: 10, pointerEvents: "none" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 8, animation: "pulse 1s infinite" }}>⛵</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#5A4A38" }}>Laddar 3D-modell…</div>
+            </div>
+          </div>
+        )}
+        {status === "idle" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+            <div style={{ textAlign: "center", color: "#A89878" }}>
+              <div style={{ fontSize: 40, marginBottom: 8, opacity: 0.4 }}>◇</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Klistra in en Google Drive-länk ovan för att visa en 3D-modell</div>
+            </div>
+          </div>
+        )}
+        {/* Layer panel */}
+        {layers.length > 0 && (
+          <div style={{
+            position: "absolute", top: 10, right: 10, zIndex: 20,
+            background: "rgba(255,253,248,0.92)", borderRadius: 8,
+            border: "1px solid #E5DDD0", padding: "10px 12px",
+            maxHeight: "calc(100% - 20px)", overflowY: "auto",
+            minWidth: 160, backdropFilter: "blur(8px)",
+            boxShadow: "0 2px 12px rgba(58,46,34,0.1)",
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Lager</div>
+            {layers.map(l => (
+              <div
+                key={l.index}
+                onClick={() => toggleLayer(l.index)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "4px 6px",
+                  borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: 500,
+                  color: l.visible ? "#3A2E22" : "#B0A898",
+                  background: l.visible ? "transparent" : "rgba(0,0,0,0.03)",
+                  transition: "all 0.15s",
+                  marginBottom: 2,
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+                onMouseLeave={e => e.currentTarget.style.background = l.visible ? "transparent" : "rgba(0,0,0,0.03)"}
+              >
+                <span style={{
+                  width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                  border: `2px solid ${l.visible ? l.color : "#CCC"}`,
+                  background: l.visible ? l.color : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.15s",
+                }}>
+                  {l.visible && <span style={{ color: "#fff", fontSize: 9, fontWeight: 800 }}>✓</span>}
+                </span>
+                <span style={{ textDecoration: l.visible ? "none" : "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ───
+const debouncedSave = createDebouncedSaver(1500);
+
+function App() {
+  const [tasks, setTasks] = useState(() => loadTasksLocal() || DEFAULT_TASKS);
+  const [gallery, setGallery] = useState(() => loadGalleryLocal());
+  const [view, setView] = useState("board");
+  const [editingTask, setEditingTask] = useState(null);
+  const [filterPhase, setFilterPhase] = useState("all");
+  const [dragOverStatus, setDragOverStatus] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const [lightbox, setLightbox] = useState(null);
+  const [syncStatus, setSyncStatus] = useState(isJsonBinConfigured() ? "loading" : "offline");
+  const isInitialLoad = useRef(true);
+
+  // On mount: load from cloud if configured
+  useEffect(() => {
+    if (!isJsonBinConfigured()) { setSyncStatus("offline"); return; }
+    loadFromCloud().then(cloudData => {
+      if (cloudData) {
+        if (cloudData.tasks && cloudData.tasks.length > 0) {
+          setTasks(cloudData.tasks);
+          saveTasksLocal(cloudData.tasks);
+        }
+        if (cloudData.gallery) {
+          setGallery(cloudData.gallery);
+          saveGalleryLocal(cloudData.gallery);
+        }
+        setSyncStatus("saved");
+      } else {
+        // Cloud is empty, push local data up
+        saveToCloud(tasks, gallery).then(ok => setSyncStatus(ok ? "saved" : "error"));
+      }
+      isInitialLoad.current = false;
+    }).catch(() => { setSyncStatus("error"); isInitialLoad.current = false; });
+  }, []);
+
+  // Auto-save on changes (skip initial load)
+  useEffect(() => {
+    if (isInitialLoad.current) return;
+    debouncedSave(tasks, gallery, setSyncStatus);
+  }, [tasks, gallery]);
+
+  const handleManualSync = async () => {
+    setSyncStatus("loading");
+    const cloudData = await loadFromCloud();
+    if (cloudData) {
+      if (cloudData.tasks && cloudData.tasks.length > 0) {
+        setTasks(cloudData.tasks);
+        saveTasksLocal(cloudData.tasks);
+      }
+      if (cloudData.gallery) {
+        setGallery(cloudData.gallery);
+        saveGalleryLocal(cloudData.gallery);
+      }
+      setSyncStatus("saved");
+      showToast("All data synkad från molnet ✓");
+    } else {
+      setSyncStatus("error");
+      showToast("Kunde inte hämta data ✗");
+    }
+  };
+
+  const nextId = () => Math.max(0, ...tasks.map(t => t.id)) + 1;
+  const handleDrop = (taskId, newStatus) => { setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t)); setDraggingId(null); showToast("Status uppdaterad ✓"); };
+  const handleSave = (form) => { if (form.id) { setTasks(prev => prev.map(t => t.id === form.id ? { ...form } : t)); } else { setTasks(prev => [...prev, { ...form, id: nextId() }]); } showToast(form.id ? "Uppgift sparad ✓" : "Uppgift tillagd ✓"); };
+  const handleDelete = (id) => { setTasks(prev => prev.filter(t => t.id !== id)); showToast("Uppgift borttagen"); };
+  const newTask = () => { setEditingTask({ id: 0, title: "", phase: "survey", status: "backlog", startWeek: 1, duration: 1, notes: "", files: [] }); };
+
+  const handleReset = () => { if (confirm("Är du säker? Detta återställer alla uppgifter och bildarkivet till ursprungsläget och synkar till molnet.")) { setTasks(DEFAULT_TASKS); setGallery(DEFAULT_FOLDERS); showToast("Data återställd"); } };
+  const handleExport = () => { const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "renovering-marga-iii-backup.json"; a.click(); URL.revokeObjectURL(url); showToast("Backup exporterad ✓"); };
+  const handleImport = () => { const input = document.createElement("input"); input.type = "file"; input.accept = ".json"; input.onchange = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const imported = JSON.parse(ev.target.result); if (Array.isArray(imported) && imported.length > 0 && imported[0].title) { const cleaned = imported.map(t => ({ ...t, files: (t.files || []).map(f => ({ ...f, type: f.type || detectFileType(f.name || f.url) })) })); setTasks(cleaned); showToast(`${imported.length} uppgifter importerade ✓`); } else { showToast("Ogiltig fil ✗"); } } catch { showToast("Kunde inte läsa filen ✗"); } }; reader.readAsText(file); }; input.click(); };
+
+  const filteredTasks = filterPhase === "all" ? tasks : tasks.filter(t => t.phase === filterPhase);
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F5F0E6" }}>
+      <div style={{ background: "linear-gradient(135deg, #3A2E22 0%, #5A4A38 100%)", padding: "28px 32px 20px", color: "#FFFDF8" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+              <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+                <path d="M4 22C4 22 8 12 16 12C24 12 28 22 28 22" stroke="#D4A76A" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M6 22H26" stroke="#D4A76A" strokeWidth="2" strokeLinecap="round" />
+                <path d="M16 8V12" stroke="#D4A76A" strokeWidth="2" strokeLinecap="round" />
+                <path d="M16 4L16 6" stroke="#D4A76A" strokeWidth="2" strokeLinecap="round" />
+                <path d="M14 5L18 5" stroke="#D4A76A" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <h1 style={{ margin: 0, fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em" }}>
+                Renovering Marga III
+              </h1>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: "#C4B89E", fontWeight: 400 }}>Projektplanering</p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {view !== "gallery" && view !== "viewer3d" && <button onClick={newTask} style={{ padding: "10px 20px", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 2px 8px rgba(91,127,110,0.3)" }}>+ Ny uppgift</button>}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", background: "rgba(255,253,248,0.12)", borderRadius: 8, overflow: "hidden" }}>
+            {[{ id: "board", label: "Tavla" }, { id: "gantt", label: "Gantt-schema" }, { id: "gallery", label: "Bildarkiv" }, { id: "viewer3d", label: "3D-vy" }].map(v => (
+              <button key={v.id} onClick={() => setView(v.id)} style={{ padding: "7px 18px", border: "none", background: view === v.id ? "rgba(255,253,248,0.22)" : "transparent", color: "#FFFDF8", fontWeight: view === v.id ? 700 : 400, fontSize: 13, cursor: "pointer", transition: "background 0.2s" }}>{v.label}</button>
+            ))}
+          </div>
+          <select value={filterPhase} onChange={e => setFilterPhase(e.target.value)} style={{ padding: "7px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 8, background: "rgba(255,253,248,0.08)", color: "#FFFDF8", fontSize: 13, cursor: "pointer", outline: "none", display: (view === "gallery" || view === "viewer3d") ? "none" : "block" }}>
+            <option value="all" style={{ color: "#3A2E22" }}>Alla faser</option>
+            {PHASES.map(p => <option key={p.id} value={p.id} style={{ color: "#3A2E22" }}>{p.label}</option>)}
+          </select>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+            <SyncIndicator status={syncStatus} />
+            {isJsonBinConfigured() && (
+              <button onClick={handleManualSync} title="Hämta senaste data från molnet" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>⟳ Synka</button>
+            )}
+            <button onClick={handleExport} title="Exportera backup" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↓ Backup</button>
+            <button onClick={handleImport} title="Importera backup" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↑ Importera</button>
+            <button onClick={handleReset} title="Återställ till ursprung" style={{ padding: "6px 12px", border: "1px solid rgba(199,91,74,0.4)", borderRadius: 7, background: "transparent", color: "#D4836E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↻ Återställ</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: "24px 24px 40px", maxWidth: 1440, margin: "0 auto" }}>
+        {(view !== "gallery" && view !== "viewer3d") && <Stats tasks={tasks} />}
+        {view === "board" ? (
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 16 }}>
+            {STATUSES.map(s => <KanbanColumn key={s.id} status={s} tasks={filteredTasks.filter(t => t.status === s.id)} phases={PHASES} onEdit={setEditingTask} onDrop={handleDrop} onDragStart={setDraggingId} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} />)}
+          </div>
+        ) : view === "gantt" ? (
+          <GanttChart tasks={tasks} phases={PHASES} onEdit={setEditingTask} filterPhase={filterPhase} />
+        ) : view === "viewer3d" ? (
+          <Rhino3DViewer />
+        ) : (
+          <ImageGallery onPreview={(src, caption) => setLightbox({ src, caption })} folders={gallery} setFolders={setGallery} />
+        )}
+        {(view !== "gallery" && view !== "viewer3d") && (
+        <div style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
+          {PHASES.map(p => (
+            <div key={p.id} onClick={() => setFilterPhase(filterPhase === p.id ? "all" : p.id)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", padding: "4px 10px", borderRadius: 6, background: filterPhase === p.id ? `${p.color}22` : "transparent", border: filterPhase === p.id ? `1.5px solid ${p.color}` : "1.5px solid transparent", transition: "all 0.2s" }}>
+              <span style={{ width: 10, height: 10, borderRadius: "50%", background: p.color }} />
+              <span style={{ fontSize: 12, fontWeight: 500, color: "#5A4A38" }}>{p.label}</span>
+            </div>
+          ))}
+        </div>
+        )}
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 11, color: "#A89878" }}>
+          {isJsonBinConfigured()
+            ? "Data synkas automatiskt till molnet (JSONBin) • Alla med länken ser samma data"
+            : "⚠ Molnsynk ej konfigurerad — data sparas bara lokalt. Fyll i JSONBIN_CONFIG i koden."}
+        </div>
+      </div>
+
+      {editingTask && <TaskModal task={editingTask} phases={PHASES} onSave={handleSave} onDelete={handleDelete} onClose={() => setEditingTask(null)} onPreview={(src, caption) => setLightbox({ src, caption })} />}
+      {lightbox && <Lightbox src={lightbox.src} caption={lightbox.caption} onClose={() => setLightbox(null)} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
