@@ -737,39 +737,164 @@ function PdfThumbnail({ url, onClick }) {
   );
 }
 
-// ─── PDF Viewer Modal ───
+// ─── PDF Viewer Modal (PDF.js canvas, no iframe/CORS issues) ───
 function PdfViewerModal({ url, name, onClose }) {
+  const [pages, setPages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [scale, setScale] = useState(1.4);
+  const canvasRefs = useRef([]);
+
+  useEffect(() => {
+    if (!window.pdfjsLib) { setError("PDF.js ej tillgänglig"); setLoading(false); return; }
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    let cancelled = false;
+    window.pdfjsLib.getDocument({ url, withCredentials: false }).promise.then(pdf => {
+      if (cancelled) return;
+      setPages(Array.from({ length: pdf.numPages }, (_, i) => i + 1));
+      setLoading(false);
+      // Render each page after state update
+      setTimeout(async () => {
+        for (let i = 0; i < pdf.numPages; i++) {
+          if (cancelled) break;
+          const page = await pdf.getPage(i + 1);
+          const canvas = canvasRefs.current[i];
+          if (!canvas) continue;
+          const vp = page.getViewport({ scale });
+          canvas.width = vp.width;
+          canvas.height = vp.height;
+          await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+        }
+      }, 50);
+    }).catch(e => { if (!cancelled) { setError(e.message); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [url, scale]);
+
   return (
-    <div onClick={onClose} style={{
-      position: "fixed", inset: 0, background: "rgba(20,15,10,0.85)", zIndex: 9999,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: 20,
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        width: "min(900px, 95vw)", height: "min(85vh, 1100px)",
-        background: "#FFFDF8", borderRadius: 12, overflow: "hidden",
-        display: "flex", flexDirection: "column",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
-      }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,15,10,0.88)", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "20px 16px", overflowY: "auto" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "min(860px, 95vw)", background: "#FFFDF8", borderRadius: 12, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid #E5DDD0", background: "#FAF6EF", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid #E5DDD0", background: "#FAF6EF", position: "sticky", top: 0, zIndex: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#3A2E22", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {name}</div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <a href={url} target="_blank" rel="noreferrer" download
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+            <button onClick={() => setScale(s => Math.max(0.6, s - 0.2))} style={{ padding: "4px 8px", border: "1px solid #DDD5C8", borderRadius: 5, background: "none", cursor: "pointer", fontSize: 14, color: "#5A4A38" }}>−</button>
+            <span style={{ fontSize: 11, color: "#8A7D6B", minWidth: 36, textAlign: "center" }}>{Math.round(scale * 100)}%</span>
+            <button onClick={() => setScale(s => Math.min(3, s + 0.2))} style={{ padding: "4px 8px", border: "1px solid #DDD5C8", borderRadius: 5, background: "none", cursor: "pointer", fontSize: 14, color: "#5A4A38" }}>+</button>
+            <a href={url} target="_blank" rel="noreferrer"
               style={{ padding: "5px 12px", background: "#5B7F6E", color: "#fff", borderRadius: 6, fontSize: 11, fontWeight: 700, textDecoration: "none" }}>↓ Ladda ner</a>
-            <button onClick={onClose}
-              style={{ padding: "5px 10px", background: "none", border: "1px solid #DDD5C8", borderRadius: 6, fontSize: 13, cursor: "pointer", color: "#6B5D4E" }}>✕ Stäng</button>
+            <button onClick={onClose} style={{ padding: "5px 10px", background: "none", border: "1px solid #DDD5C8", borderRadius: 6, fontSize: 13, cursor: "pointer", color: "#6B5D4E" }}>✕</button>
           </div>
         </div>
-        {/* PDF embed */}
-        <iframe src={`${url}#toolbar=1&navpanes=0`} style={{ flex: 1, border: "none", width: "100%" }} title={name} />
+        {/* Pages */}
+        <div style={{ padding: "16px", background: "#E8E0D4", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+          {loading && <div style={{ padding: 40, color: "#8A7D6B", fontSize: 13 }}>Laddar PDF…</div>}
+          {error && <div style={{ padding: 20, color: "#C75B4A", fontSize: 13 }}>⚠ {error}</div>}
+          {pages.map((_, i) => (
+            <canvas key={i} ref={el => canvasRefs.current[i] = el}
+              style={{ maxWidth: "100%", borderRadius: 4, boxShadow: "0 2px 12px rgba(0,0,0,0.2)" }} />
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
+// ─── GitHub Uploader ───
+const UPLOAD_PASSWORD_KEY = "marga_upload_pw";
+function GithubUploader({ targetPath, onDone }) {
+  const [file, setFile] = useState(null);
+  const [pw, setPw] = useState("");
+  const [token, setToken] = useState(() => sessionStorage.getItem(UPLOAD_PASSWORD_KEY) || "");
+  const [status, setStatus] = useState("idle"); // idle|uploading|done|error|auth
+  const [msg, setMsg] = useState("");
+  const [showAuth, setShowAuth] = useState(false);
+
+  // GitHub Personal Access Token stored in sessionStorage (only for this session)
+  const authenticated = token.length > 0;
+
+  async function upload() {
+    if (!file || !token) return;
+    setStatus("uploading");
+    setMsg("");
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target.result.split(",")[1];
+        const path = `${targetPath}/${file.name}`;
+        // Check if file already exists (to get SHA for update)
+        let sha = undefined;
+        const check = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+          headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" }
+        });
+        if (check.ok) { const existing = await check.json(); sha = existing.sha; }
+
+        const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+          method: "PUT",
+          headers: { Authorization: `token ${token}`, "Content-Type": "application/json", Accept: "application/vnd.github.v3+json" },
+          body: JSON.stringify({ message: `Laddar upp ${file.name} via Marga planerare`, content: base64, ...(sha ? { sha } : {}) }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          if (res.status === 401) { setToken(""); sessionStorage.removeItem(UPLOAD_PASSWORD_KEY); setStatus("error"); setMsg("Felaktigt token — logga in igen"); return; }
+          throw new Error(err.message || `HTTP ${res.status}`);
+        }
+        setStatus("done");
+        setMsg(`✓ ${file.name} uppladdad!`);
+        setFile(null);
+        if (onDone) onDone();
+      };
+      reader.readAsDataURL(file);
+    } catch(e) { setStatus("error"); setMsg(`✗ ${e.message}`); }
+  }
+
+  function saveToken() {
+    sessionStorage.setItem(UPLOAD_PASSWORD_KEY, pw);
+    setToken(pw);
+    setPw("");
+    setShowAuth(false);
+  }
+
+  const inputStyle = { padding: "7px 10px", borderRadius: 6, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
+
+  if (!authenticated || showAuth) return (
+    <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: 10, padding: 16, marginTop: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>🔒 GitHub-token för uppladdning</div>
+      <div style={{ fontSize: 11, color: "#A89878", marginBottom: 10 }}>
+        Krävs ett GitHub Personal Access Token (PAT) med <b>Contents: write</b>-behörighet.<br/>
+        Skapa på: github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input type="password" placeholder="ghp_xxxxxxxxxxxx" value={pw} onChange={e => setPw(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && saveToken()} style={{ ...inputStyle, flex: 1 }} autoFocus />
+        <button onClick={saveToken} disabled={!pw.trim()} style={{ padding: "7px 14px", background: pw.trim() ? "#5B7F6E" : "#E5DDD0", color: pw.trim() ? "#fff" : "#A89878", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: pw.trim() ? "pointer" : "default" }}>Spara</button>
+      </div>
+      <div style={{ fontSize: 10, color: "#B0A898", marginTop: 6 }}>Token sparas bara i denna webbläsarflik (sessionStorage), inte i molnet.</div>
+    </div>
+  );
+
+  return (
+    <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: 10, padding: 14, marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#5B7F6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>↑ Ladda upp till {targetPath}</div>
+        <button onClick={() => { setToken(""); sessionStorage.removeItem(UPLOAD_PASSWORD_KEY); }} style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer" }}>🔒 Logga ut</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <label style={{ padding: "7px 14px", background: "#E8EFF0", border: "1.5px solid #C8D8DA", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#3A5A60" }}>
+          {file ? `📎 ${file.name}` : "Välj fil…"}
+          <input type="file" style={{ display: "none" }} onChange={e => { setFile(e.target.files[0]); setStatus("idle"); setMsg(""); }} />
+        </label>
+        <button onClick={upload} disabled={!file || status === "uploading"} style={{ padding: "7px 16px", background: file && status !== "uploading" ? "#5B7F6E" : "#E5DDD0", color: file && status !== "uploading" ? "#fff" : "#A89878", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: file ? "pointer" : "default" }}>
+          {status === "uploading" ? "Laddar upp…" : "↑ Ladda upp"}
+        </button>
+      </div>
+      {msg && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: status === "done" ? "#5B7F6E" : "#C75B4A" }}>{msg}</div>}
+    </div>
+  );
+}
+
 // ─── Image Gallery ───
-function ImageGallery({ onPreview, folders, setFolders }) {
+function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
   const [ghFolders, setGhFolders] = useState([]);
   const [activeFolder, setActiveFolder] = useState(null);
   const [folderFiles, setFolderFiles] = useState([]);
@@ -934,8 +1059,7 @@ function ImageGallery({ onPreview, folders, setFolders }) {
                   <span style={{ fontSize: 12, color: "#A89878" }}>({folderFiles.length} filer)</span>
                 </div>
                 <a href={`https://github.com/${GITHUB_REPO}/tree/main/${activeFolder.path}`} target="_blank" rel="noreferrer"
-                  style={{ fontSize: 11, color: "#5B7F6E", fontWeight: 600, textDecoration: "none" }}>↗ Öppna i GitHub</a>
-              </div>
+                  style={{ fontSize: 11, color: "#5B7F6E", fontWeight: 600, textDecoration: "none" }}>↗ Öppna i GitHub</a>              </div>
 
               {ghLoading ? (
                 <div style={{ color: "#A89878", fontSize: 13, padding: 20 }}>Laddar filer…</div>
@@ -951,9 +1075,11 @@ function ImageGallery({ onPreview, folders, setFolders }) {
                     const isPdf = file.name.toLowerCase().endsWith(".pdf");
                     const rawUrl = `${GITHUB_RAW}/${file.path}`;
                     const ext = file.name.split(".").pop().toUpperCase();
+                    const is3dm = file.name.toLowerCase().endsWith(".3dm");
                     const handleClick = () => {
                       if (isImg) onPreview(rawUrl, file.name);
                       else if (isPdf) setPdfViewer({ url: rawUrl, name: file.name });
+                      else if (is3dm && onOpen3dModel) onOpen3dModel(rawUrl);
                       else window.open(rawUrl, "_blank");
                     };
                     return (
@@ -971,7 +1097,7 @@ function ImageGallery({ onPreview, folders, setFolders }) {
                             <PdfThumbnail url={rawUrl} onClick={handleClick} />
                           ) : (
                             <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                              <span style={{ fontSize: 32 }}>{ext === "DWG" || ext === "DXF" ? "📐" : ext === "3DM" || ext === "STEP" || ext === "STP" ? "◈" : "📎"}</span>
+                              <span style={{ fontSize: 32 }}>{is3dm ? "◈" : ext === "DWG" || ext === "DXF" ? "📐" : "📎"}</span>
                               <span style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", background: "#E5DDD0", padding: "2px 6px", borderRadius: 4 }}>{ext}</span>
                             </div>
                           )}
@@ -980,10 +1106,10 @@ function ImageGallery({ onPreview, folders, setFolders }) {
                         <div style={{ padding: "8px 10px" }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "#3A2E22", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={file.name}>{file.name}</div>
                           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                            {(isImg || isPdf) && (
+                            {(isImg || isPdf || is3dm) && (
                               <button onClick={e => { e.stopPropagation(); handleClick(); }}
                                 style={{ flex: 1, padding: "4px 0", fontSize: 10, fontWeight: 700, background: "#F0EBE2", border: "none", borderRadius: 5, cursor: "pointer", color: "#5A4A38" }}>
-                                {isPdf ? "📄 Öppna" : "👁 Visa"}
+                                {isPdf ? "📄 Öppna" : is3dm ? "◈ 3D-vy" : "👁 Visa"}
                               </button>
                             )}
                             <a href={rawUrl} download target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
@@ -995,6 +1121,7 @@ function ImageGallery({ onPreview, folders, setFolders }) {
                   })}
                 </div>
               )}
+              <GithubUploader targetPath={activeFolder.path} onDone={() => openFolder(activeFolder)} />
             </div>
           )}
         </div>
@@ -1005,7 +1132,7 @@ function ImageGallery({ onPreview, folders, setFolders }) {
 
 
 // ─── Rhino 3D Viewer ───
-function Rhino3DViewer() {
+function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
   const containerRef = useRef(null);
   const rendererRef = useRef(null);
   const sceneRef = useRef(null);
@@ -1038,6 +1165,15 @@ function Rhino3DViewer() {
     document.head.appendChild(script);
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, []);
+
+  // Auto-load when navigated from file browser
+  useEffect(() => {
+    if (pendingUrl && rhinoModule) {
+      setDriveUrl(pendingUrl);
+      if (onPendingConsumed) onPendingConsumed();
+      setTimeout(() => loadFromDrive(pendingUrl), 100);
+    }
+  }, [pendingUrl, rhinoModule]);
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -1215,8 +1351,9 @@ function Rhino3DViewer() {
     toRemove.forEach(obj => { sceneRef.current.remove(obj); if (obj.geometry) obj.geometry.dispose(); if (obj.material) obj.material.dispose(); });
   }
 
-  async function loadFromDrive() {
-    if (!driveUrl.trim()) return;
+  async function loadFromDrive(urlOverride) {
+    const targetUrl = (urlOverride || driveUrl || "").trim();
+    if (!targetUrl) return;
     if (!rhinoModule) { setErrorMsg("rhino3dm laddas fortfarande, vänta en stund…"); return; }
 
     setStatus("loading");
@@ -1226,21 +1363,20 @@ function Rhino3DViewer() {
     try {
       // Build fetch URL — GitHub raw doesn't need proxy, Drive does
       let fetchUrl;
-      if (isGithubUrl(driveUrl.trim())) {
-        fetchUrl = toGithubRaw(driveUrl.trim());
-      } else if (isGdriveUrl(driveUrl.trim())) {
+      if (isGithubUrl(targetUrl)) {
+        fetchUrl = toGithubRaw(targetUrl);
+      } else if (isGdriveUrl(targetUrl)) {
         if (!isProxyConfigured()) { setErrorMsg("CORS-proxy ej konfigurerad. Fyll i CORS_PROXY_URL i koden."); setStatus("error"); return; }
         const patterns = [/\/file\/d\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/, /\/d\/([a-zA-Z0-9_-]+)/];
         let fileId = null;
-        for (const p of patterns) { const m = driveUrl.match(p); if (m) { fileId = m[1]; break; } }
+        for (const p of patterns) { const m = targetUrl.match(p); if (m) { fileId = m[1]; break; } }
         if (!fileId) throw new Error("Ogiltig Google Drive-länk");
         const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
         fetchUrl = `${CORS_PROXY_URL}?url=${encodeURIComponent(downloadUrl)}`;
       } else {
-        // Generic URL — try direct first, fall back to proxy
         fetchUrl = isProxyConfigured()
-          ? `${CORS_PROXY_URL}?url=${encodeURIComponent(driveUrl.trim())}`
-          : driveUrl.trim();
+          ? `${CORS_PROXY_URL}?url=${encodeURIComponent(targetUrl)}`
+          : targetUrl;
       }
 
       const res = await fetch(fetchUrl);
@@ -1705,6 +1841,7 @@ function App() {
   const [draggingId, setDraggingId] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [syncStatus, setSyncStatus] = useState(isJsonBinConfigured() ? "loading" : "offline");
+  const [pending3dUrl, setPending3dUrl] = useState(null);
   const isInitialLoad = useRef(true);
 
   // On mount: load from cloud if configured
@@ -1822,9 +1959,10 @@ function App() {
         ) : view === "gantt" ? (
           <GanttChart tasks={tasks} phases={PHASES} onEdit={setEditingTask} filterPhase={filterPhase} />
         ) : view === "viewer3d" ? (
-          <Rhino3DViewer />
+          <Rhino3DViewer pendingUrl={pending3dUrl} onPendingConsumed={() => setPending3dUrl(null)} />
         ) : (
-          <ImageGallery onPreview={(src, caption) => setLightbox({ src, caption })} folders={gallery} setFolders={setGallery} />
+          <ImageGallery onPreview={(src, caption) => setLightbox({ src, caption })} folders={gallery} setFolders={setGallery}
+            onOpen3dModel={url => { setView("viewer3d"); setPending3dUrl(url); }} />
         )}
         {(view !== "gallery" && view !== "viewer3d") && (
         <div style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
