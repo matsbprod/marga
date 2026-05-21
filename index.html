@@ -249,6 +249,21 @@ const GALLERY_KEY = "boat_gallery_v1";
 const GITHUB_REPO = "matsbprod/marga";
 const GITHUB_RAW = "https://raw.githubusercontent.com/matsbprod/marga/main";
 const GITHUB_API = "https://api.github.com/repos/matsbprod/marga/contents";
+
+// Use upload account token for API reads if available (avoids 60 req/hr rate limit)
+function ghApiHeaders() {
+  const saved = sessionStorage.getItem(UPLOAD_SESSION_KEY);
+  if (saved) {
+    try {
+      const session = JSON.parse(saved);
+      const account = UPLOAD_ACCOUNTS.find(a => a.id === session.id);
+      if (account?.tokenEnc) {
+        return { Accept: "application/vnd.github.v3+json", Authorization: `token ${decodeToken(account.tokenEnc)}` };
+      }
+    } catch(e) {}
+  }
+  return { Accept: "application/vnd.github.v3+json" };
+}
 const IMAGE_EXTS = ["jpg","jpeg","png","gif","webp","svg","bmp","tiff"];
 const DOC_EXTS   = ["pdf","dwg","dxf","step","stp","stl","3dm","doc","docx","xls","xlsx","txt"];
 
@@ -1012,15 +1027,18 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
     setGhLoading(true);
     setGhError("");
     try {
-      const res = await fetch(`${GITHUB_API}`, { headers: { Accept: "application/vnd.github.v3+json" } });
-      if (!res.ok) throw new Error(`GitHub API: HTTP ${res.status}`);
+      const res = await fetch(`${GITHUB_API}`, { headers: ghApiHeaders() });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(`GitHub API: HTTP ${res.status}${errBody.message ? ` — ${errBody.message}` : ""}`);
+      }
       const items = await res.json();
       // Get all subdirectories (bilder/, dokument/, 3d-modeller/ etc.)
       const topDirs = items.filter(i => i.type === "dir");
       // Recursively collect all sub-folders
       const allFolders = [];
       for (const dir of topDirs) {
-        const sub = await fetch(`${GITHUB_API}/${dir.name}`, { headers: { Accept: "application/vnd.github.v3+json" } });
+        const sub = await fetch(`${GITHUB_API}/${dir.name}`, { headers: ghApiHeaders() });
         if (!sub.ok) continue;
         const subItems = await sub.json();
         const subDirs = subItems.filter(i => i.type === "dir");
@@ -1046,7 +1064,7 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
     setFolderFiles([]);
     setGhLoading(true);
     try {
-      const res = await fetch(`${GITHUB_API}/${folder.path}`, { headers: { Accept: "application/vnd.github.v3+json" } });
+      const res = await fetch(`${GITHUB_API}/${folder.path}`, { headers: ghApiHeaders() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const items = await res.json();
       const files = items.filter(i => i.type === "file" && (isImageFile(i.name) || isDocFile(i.name)));
