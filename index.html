@@ -760,7 +760,7 @@ function PdfPageCanvas({ pdf, pageNum, scale }) {
   }, [pdf, pageNum, scale]);
 
   return (
-    <canvas ref={canvasRef} style={{ display: "block", maxWidth: "100%", borderRadius: 3, boxShadow: "0 2px 10px rgba(0,0,0,0.25)", margin: "0 auto" }} />
+    <canvas ref={canvasRef} style={{ display: "block", borderRadius: 3, boxShadow: "0 2px 10px rgba(0,0,0,0.25)", margin: "0 auto" }} />
   );
 }
 
@@ -805,7 +805,7 @@ function PdfViewerModal({ url, name, onClose }) {
       </div>
 
       {/* Pages */}
-      <div onClick={e => e.stopPropagation()} style={{ width: "min(860px, 95vw)", padding: "16px 0 40px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "min(860px, 95vw)", padding: "16px 0 40px", display: "flex", flexDirection: "column", gap: 12, overflowX: "auto" }}>
         {loading && <div style={{ padding: 60, color: "#C4B89E", fontSize: 13, textAlign: "center" }}>Laddar PDF…</div>}
         {error && <div style={{ padding: 20, color: "#C75B4A", fontSize: 13, textAlign: "center" }}>⚠ {error}</div>}
         {pdf && Array.from({ length: numPages }, (_, i) => (
@@ -816,94 +816,177 @@ function PdfViewerModal({ url, name, onClose }) {
   );
 }
 
-// ─── GitHub Uploader ───
-const UPLOAD_PASSWORD_KEY = "marga_upload_pw";
+// ─── GitHub Uploader — hardcoded accounts ───
+// XOR-obfuskering: inte kryptografi men hindrar tokens från att synas i klartext
+function xorObfuscate(str, key = "marga1918") {
+  return Array.from(str).map((c, i) =>
+    String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))
+  ).join("");
+}
+function encodeToken(tok) { return btoa(xorObfuscate(tok)); }
+function decodeToken(enc) { return xorObfuscate(atob(enc), "marga1918"); }
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  KONTON — byt ut TOKEN_ENC mot encodeToken("ghp_xxx")  ║
+// ║  Kör encodeToken("ghp_ditt_token") i webbkonsolen       ║
+// ║  och klistra in resultatet som TOKEN_ENC nedan          ║
+// ╚══════════════════════════════════════════════════════════╝
+const UPLOAD_ACCOUNTS = [
+  { id: "konto1", name: "Mats",    password: "marga1",  tokenEnc: "" },
+  { id: "konto2", name: "Konto 2", password: "marga2",  tokenEnc: "" },
+  { id: "konto3", name: "Konto 3", password: "marga3",  tokenEnc: "" },
+  { id: "konto4", name: "Konto 4", password: "marga4",  tokenEnc: "" },
+];
+
+const UPLOAD_SESSION_KEY = "marga_upload_account";
+
 function GithubUploader({ targetPath, onDone }) {
+  const [loggedIn, setLoggedIn] = useState(() => {
+    const saved = sessionStorage.getItem(UPLOAD_SESSION_KEY);
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [selectedId, setSelectedId] = useState(UPLOAD_ACCOUNTS[0].id);
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [file, setFile] = useState(null);
-  const [pw, setPw] = useState("");
-  const [token, setToken] = useState(() => sessionStorage.getItem(UPLOAD_PASSWORD_KEY) || "");
-  const [status, setStatus] = useState("idle"); // idle|uploading|done|error|auth
+  const [status, setStatus] = useState("idle");
   const [msg, setMsg] = useState("");
-  const [showAuth, setShowAuth] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
-  // GitHub Personal Access Token stored in sessionStorage (only for this session)
-  const authenticated = token.length > 0;
+  const inputStyle = { padding: "7px 10px", borderRadius: 6, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
 
-  async function upload() {
-    if (!file || !token) return;
+  function login() {
+    const account = UPLOAD_ACCOUNTS.find(a => a.id === selectedId);
+    if (!account) return;
+    if (account.password !== password) { setLoginError("Fel lösenord"); return; }
+    if (!account.tokenEnc) { setLoginError("Token ej konfigurerat för detta konto — kontakta admin"); return; }
+    const session = { id: account.id, name: account.name };
+    sessionStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify(session));
+    setLoggedIn(session);
+    setPassword("");
+    setLoginError("");
+  }
+
+  function logout() {
+    sessionStorage.removeItem(UPLOAD_SESSION_KEY);
+    setLoggedIn(null);
+    setFile(null);
+    setStatus("idle");
+    setMsg("");
+  }
+
+  function getToken() {
+    const account = UPLOAD_ACCOUNTS.find(a => a.id === loggedIn?.id);
+    return account ? decodeToken(account.tokenEnc) : null;
+  }
+
+  async function upload(uploadFile) {
+    const f = uploadFile || file;
+    if (!f) return;
+    const token = getToken();
+    if (!token) return;
     setStatus("uploading");
     setMsg("");
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64 = e.target.result.split(",")[1];
-        const path = `${targetPath}/${file.name}`;
-        // Check if file already exists (to get SHA for update)
-        let sha = undefined;
+        const path = `${targetPath}/${f.name}`;
+        let sha;
         const check = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
           headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" }
         });
-        if (check.ok) { const existing = await check.json(); sha = existing.sha; }
-
+        if (check.ok) { sha = (await check.json()).sha; }
         const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
           method: "PUT",
           headers: { Authorization: `token ${token}`, "Content-Type": "application/json", Accept: "application/vnd.github.v3+json" },
-          body: JSON.stringify({ message: `Laddar upp ${file.name} via Marga planerare`, content: base64, ...(sha ? { sha } : {}) }),
+          body: JSON.stringify({ message: `${loggedIn.name}: laddar upp ${f.name}`, content: base64, ...(sha ? { sha } : {}) }),
         });
         if (!res.ok) {
           const err = await res.json();
-          if (res.status === 401) { setToken(""); sessionStorage.removeItem(UPLOAD_PASSWORD_KEY); setStatus("error"); setMsg("Felaktigt token — logga in igen"); return; }
+          if (res.status === 401) { logout(); setStatus("error"); setMsg("Session utgången — logga in igen"); return; }
           throw new Error(err.message || `HTTP ${res.status}`);
         }
         setStatus("done");
-        setMsg(`✓ ${file.name} uppladdad!`);
+        setMsg(`✓ ${f.name} uppladdad!`);
         setFile(null);
-        if (onDone) onDone();
+        if (onDone) setTimeout(onDone, 800);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(f);
     } catch(e) { setStatus("error"); setMsg(`✗ ${e.message}`); }
   }
 
-  function saveToken() {
-    sessionStorage.setItem(UPLOAD_PASSWORD_KEY, pw);
-    setToken(pw);
-    setPw("");
-    setShowAuth(false);
+  function onDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) { setFile(dropped); setStatus("idle"); setMsg(""); }
   }
 
-  const inputStyle = { padding: "7px 10px", borderRadius: 6, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
-
-  if (!authenticated || showAuth) return (
+  // Login form
+  if (!loggedIn) return (
     <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: 10, padding: 16, marginTop: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>🔒 GitHub-token för uppladdning</div>
-      <div style={{ fontSize: 11, color: "#A89878", marginBottom: 10 }}>
-        Krävs ett GitHub Personal Access Token (PAT) med <b>Contents: write</b>-behörighet.<br/>
-        Skapa på: github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>🔒 Logga in för att ladda upp</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setLoginError(""); }}
+          style={{ ...inputStyle, cursor: "pointer" }}>
+          {UPLOAD_ACCOUNTS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <input type="password" placeholder="Lösenord…" value={password}
+          onChange={e => { setPassword(e.target.value); setLoginError(""); }}
+          onKeyDown={e => e.key === "Enter" && login()}
+          style={{ ...inputStyle, width: 130 }} />
+        <button onClick={login} disabled={!password} style={{ padding: "7px 14px", background: password ? "#5B7F6E" : "#E5DDD0", color: password ? "#fff" : "#A89878", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: password ? "pointer" : "default" }}>Logga in</button>
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input type="password" placeholder="ghp_xxxxxxxxxxxx" value={pw} onChange={e => setPw(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && saveToken()} style={{ ...inputStyle, flex: 1 }} autoFocus />
-        <button onClick={saveToken} disabled={!pw.trim()} style={{ padding: "7px 14px", background: pw.trim() ? "#5B7F6E" : "#E5DDD0", color: pw.trim() ? "#fff" : "#A89878", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: pw.trim() ? "pointer" : "default" }}>Spara</button>
-      </div>
-      <div style={{ fontSize: 10, color: "#B0A898", marginTop: 6 }}>Token sparas bara i denna webbläsarflik (sessionStorage), inte i molnet.</div>
+      {loginError && <div style={{ fontSize: 11, color: "#C75B4A", marginTop: 6, fontWeight: 600 }}>{loginError}</div>}
     </div>
   );
 
+  // Upload form (logged in)
   return (
-    <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: 10, padding: 14, marginTop: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#5B7F6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>↑ Ladda upp till {targetPath}</div>
-        <button onClick={() => { setToken(""); sessionStorage.removeItem(UPLOAD_PASSWORD_KEY); }} style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer" }}>🔒 Logga ut</button>
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#5B7F6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>↑ Ladda upp — inloggad som {loggedIn.name}</div>
+        <button onClick={logout} style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer" }}>Logga ut</button>
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <label style={{ padding: "7px 14px", background: "#E8EFF0", border: "1.5px solid #C8D8DA", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#3A5A60" }}>
-          {file ? `📎 ${file.name}` : "Välj fil…"}
-          <input type="file" style={{ display: "none" }} onChange={e => { setFile(e.target.files[0]); setStatus("idle"); setMsg(""); }} />
-        </label>
-        <button onClick={upload} disabled={!file || status === "uploading"} style={{ padding: "7px 16px", background: file && status !== "uploading" ? "#5B7F6E" : "#E5DDD0", color: file && status !== "uploading" ? "#fff" : "#A89878", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: file ? "pointer" : "default" }}>
-          {status === "uploading" ? "Laddar upp…" : "↑ Ladda upp"}
-        </button>
+
+      {/* Drop zone */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        onClick={() => document.getElementById(`file-input-${targetPath.replace(/\//g,"-")}`)?.click()}
+        style={{
+          border: `2px dashed ${dragging ? "#5B7F6E" : file ? "#5B7F6E" : "#C4B89E"}`,
+          borderRadius: 10, padding: "20px 16px", textAlign: "center", cursor: "pointer",
+          background: dragging ? "rgba(91,127,110,0.06)" : file ? "rgba(91,127,110,0.04)" : "#FAF6EF",
+          transition: "all 0.15s",
+        }}>
+        <input id={`file-input-${targetPath.replace(/\//g,"-")}`} type="file" style={{ display: "none" }}
+          onChange={e => { const f = e.target.files[0]; if (f) { setFile(f); setStatus("idle"); setMsg(""); } }} />
+        {file ? (
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#3A2E22" }}>📎 {file.name}</div>
+            <div style={{ fontSize: 11, color: "#8A7D6B", marginTop: 2 }}>{(file.size / 1024).toFixed(0)} KB</div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 24, marginBottom: 4 }}>↑</div>
+            <div style={{ fontSize: 12, color: "#8A7D6B" }}>Dra och släpp en fil hit, eller klicka för att välja</div>
+          </div>
+        )}
       </div>
+
+      {file && (
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button onClick={() => upload()} disabled={status === "uploading"}
+            style={{ flex: 1, padding: "8px 0", background: status === "uploading" ? "#E5DDD0" : "#5B7F6E", color: status === "uploading" ? "#A89878" : "#fff", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 12, cursor: status === "uploading" ? "default" : "pointer" }}>
+            {status === "uploading" ? "Laddar upp…" : `↑ Ladda upp till ${targetPath.split("/").pop()}`}
+          </button>
+          <button onClick={() => { setFile(null); setStatus("idle"); setMsg(""); }}
+            style={{ padding: "8px 12px", background: "none", border: "1px solid #DDD5C8", borderRadius: 7, cursor: "pointer", color: "#8A7D6B", fontSize: 12 }}>✕</button>
+        </div>
+      )}
       {msg && <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: status === "done" ? "#5B7F6E" : "#C75B4A" }}>{msg}</div>}
     </div>
   );
