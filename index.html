@@ -1386,8 +1386,9 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
         }
         updateCamera();
       } else if (isDragging.current) {
-        // Apply pivot on first movement — no jump since angles match current camera pos
-        if (pendingPivot) {
+        // Only apply pivot if mouse has actually moved (threshold: 3px)
+        const moved = Math.abs(dx) + Math.abs(dy);
+        if (pendingPivot && moved > 2) {
           applyPivot(pendingPivot);
           pendingPivot = null;
         }
