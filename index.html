@@ -248,14 +248,13 @@ const GITHUB_REPO = "matsbprod/marga";
 const GITHUB_RAW = "https://raw.githubusercontent.com/matsbprod/marga/main";
 const GITHUB_API = "https://api.github.com/repos/matsbprod/marga/contents";
 
-// Read-only token for GitHub API (avoids 60 req/hr rate limit)
-// Token split to avoid secret scanning — joined at runtime
-const _rt = ["Z2l0aHViX3BhdF8xMUNCSkJDVUEwRGN0UUt1Q2hObXJtXzlGU01vZkRZbFNRUV",
-             "hxaXdkeDMxUnp5NjByeWd2WnlvOWo1dEZVTUZ4dk1aQkIyUkNNSHNrUGloZWFi"].join("");
-const GITHUB_READ_TOKEN = atob(_rt);
+// GitHub read token — stored in localStorage, never in code
+const GITHUB_TOKEN_KEY = "marga_gh_read_token";
+function getGithubReadToken() { return localStorage.getItem(GITHUB_TOKEN_KEY) || ""; }
+function setGithubReadToken(t) { if (t) localStorage.setItem(GITHUB_TOKEN_KEY, t); else localStorage.removeItem(GITHUB_TOKEN_KEY); }
 
-// Use upload account token for API reads if available (avoids 60 req/hr rate limit)
 function ghApiHeaders() {
+  // Prefer upload account token if logged in
   const saved = sessionStorage.getItem(UPLOAD_SESSION_KEY);
   if (saved) {
     try {
@@ -266,7 +265,9 @@ function ghApiHeaders() {
       }
     } catch(e) {}
   }
-  return { Accept: "application/vnd.github.v3+json", Authorization: `token ${GITHUB_READ_TOKEN}` };
+  const tok = getGithubReadToken();
+  if (tok) return { Accept: "application/vnd.github.v3+json", Authorization: `token ${tok}` };
+  return { Accept: "application/vnd.github.v3+json" };
 }
 const IMAGE_EXTS = ["jpg","jpeg","png","gif","webp","svg","bmp","tiff"];
 const DOC_EXTS   = ["pdf","dwg","dxf","step","stp","stl","3dm","doc","docx","xls","xlsx","txt"];
@@ -1052,7 +1053,10 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
   const [folderFiles, setFolderFiles] = useState([]);
   const [ghLoading, setGhLoading] = useState(false);
   const [ghError, setGhError] = useState("");
-  const [pdfViewer, setPdfViewer] = useState(null); // { url, name }
+  const [pdfViewer, setPdfViewer] = useState(null);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [tokenInput, setTokenInput] = useState("");
+  const [hasToken, setHasToken] = useState(() => !!getGithubReadToken()); // { url, name }
 
   const inputStyle = { padding: "8px 10px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FBF8F2", fontSize: 13, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
 
@@ -1139,6 +1143,21 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
     return acc;
   }, {});
 
+  function saveToken() {
+    setGithubReadToken(tokenInput.trim());
+    setHasToken(!!tokenInput.trim());
+    setTokenInput("");
+    setShowTokenInput(false);
+    setGhError("");
+    fetchGhFolders();
+  }
+
+  function clearToken() {
+    setGithubReadToken("");
+    setHasToken(false);
+    setGhFolders([]);
+  }
+
   return (
     <div>
       {pdfViewer && <PdfViewerModal url={pdfViewer.url} name={pdfViewer.name} onClose={() => setPdfViewer(null)} />}
@@ -1149,6 +1168,11 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "#8A7D6B" }}>
             GitHub: {GITHUB_REPO} •
             <span style={{ marginLeft: 6, cursor: "pointer", color: "#5B7F6E", fontWeight: 600 }} onClick={fetchGhFolders}>⟳ Uppdatera</span>
+            {" • "}
+            <span style={{ cursor: "pointer", color: hasToken ? "#5B7F6E" : "#C75B4A", fontWeight: 600 }} onClick={() => setShowTokenInput(v => !v)}>
+              {hasToken ? "🔑 Token satt" : "⚠ Sätt GitHub-token"}
+            </span>
+            {hasToken && <span style={{ cursor: "pointer", color: "#A89878", marginLeft: 6 }} onClick={clearToken}>✕</span>}
           </p>
         </div>
         <a href={`https://github.com/${GITHUB_REPO}`} target="_blank" rel="noreferrer"
@@ -1157,9 +1181,30 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
         </a>
       </div>
 
+      {/* Token input */}
+      {showTokenInput && (
+        <div style={{ background: "#FAF6EF", border: "1.5px solid #E5DDD0", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>🔑 GitHub read-only token</div>
+          <div style={{ fontSize: 11, color: "#A89878", marginBottom: 10 }}>
+            Skapa ett Fine-grained token på github.com → Settings → Developer settings → Personal access tokens.<br/>
+            Sätt <b>Contents: Read-only</b> på marga-repot. Sparas i din webbläsare, aldrig i koden eller GitHub.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input type="password" placeholder="github_pat_..." value={tokenInput} onChange={e => setTokenInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && saveToken()}
+              style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" }} autoFocus />
+            <button onClick={saveToken} disabled={!tokenInput.trim()}
+              style={{ padding: "7px 14px", background: tokenInput.trim() ? "#5B7F6E" : "#E5DDD0", color: tokenInput.trim() ? "#fff" : "#A89878", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: tokenInput.trim() ? "pointer" : "default" }}>Spara</button>
+          </div>
+        </div>
+      )}
+
       {ghError && (
         <div style={{ padding: "10px 14px", background: "#FFF0ED", borderRadius: 8, border: "1px solid #F5C4BA", fontSize: 12, color: "#C75B4A", marginBottom: 16 }}>
-          ⚠ Kunde inte hämta från GitHub: {ghError}
+          ⚠ {ghError}
+          {(ghError.includes("401") || ghError.includes("403") || ghError.includes("rate limit")) && (
+            <span style={{ marginLeft: 8, cursor: "pointer", fontWeight: 700, textDecoration: "underline" }} onClick={() => setShowTokenInput(true)}>→ Sätt GitHub-token</span>
+          )}
         </div>
       )}
 
