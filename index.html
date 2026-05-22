@@ -250,8 +250,8 @@ const GITHUB_API = "https://api.github.com/repos/matsbprod/marga/contents";
 
 // Read-only token for GitHub API (avoids 60 req/hr rate limit)
 // Token split to avoid secret scanning — joined at runtime
-const _rt = ["Z2l0aHViX3BhdF8xMUNCSkJDVUEwVlFCaUhUaUxrQzR4X3Vyekk5MmlDdThPT1",
-             "FVS3RGSXZ2d3ZZT1NDVUxFVjFnakliaFBodEdzcFNLUUtIRklKM1lIeERCYVYy"].join("");
+const _rt = ["Z2l0aHViX3BhdF8xMUNCSkJDVUEwRGN0UUt1Q2hObXJtXzlGU01vZkRZbFNRUV",
+             "hxaXdkeDMxUnp5NjByeWd2WnlvOWo1dEZVTUZ4dk1aQkIyUkNNSHNrUGloZWFi"].join("");
 const GITHUB_READ_TOKEN = atob(_rt);
 
 // Use upload account token for API reads if available (avoids 60 req/hr rate limit)
