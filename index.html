@@ -1431,36 +1431,6 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
     };
     animate();
 
-    // Raycaster for finding orbit pivot point
-    const raycaster = new THREE.Raycaster();
-    const mouseNdc = new THREE.Vector2();
-    let pendingPivot = null;
-
-    function findPivotAt(clientX, clientY) {
-      const rect = el.getBoundingClientRect();
-      mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      mouseNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(mouseNdc, camera);
-      const meshes = [];
-      scene.traverse(child => { if (child.isMesh && child.visible) meshes.push(child); });
-      const hits = raycaster.intersectObjects(meshes, false);
-      if (hits.length > 0) return hits[0].point.clone();
-      return null;
-    }
-
-    function applyPivot(pivot) {
-      const cam = cameraRef.current;
-      if (!cam || !pivot) return;
-      const offset = cam.position.clone().sub(pivot);
-      const dist = offset.length();
-      if (dist < 0.001) return;
-      zoomRef.current = dist / 50;
-      rotation.current.x = Math.asin(Math.max(-0.999, Math.min(0.999, offset.z / dist)));
-      rotation.current.y = Math.atan2(offset.y, offset.x);
-      panOffset.current.copy(pivot);
-      // Don't call updateCamera here — angles already match current position
-    }
-
     // Mouse/touch controls: left=rotate, middle=pan, scroll=zoom
     const el = renderer.domElement;
     const onDown = (e) => {
@@ -1468,7 +1438,6 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
         isDragging.current = true;
         const pt = e.touches[0];
         prevMouse.current = { x: pt.clientX, y: pt.clientY };
-        pendingPivot = findPivotAt(pt.clientX, pt.clientY);
       } else if (e.button === 1 || e.button === 2) {
         e.preventDefault();
         isPanning.current = true;
@@ -1476,7 +1445,6 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
       } else {
         isDragging.current = true;
         prevMouse.current = { x: e.clientX, y: e.clientY };
-        pendingPivot = findPivotAt(e.clientX, e.clientY);
       }
     };
     const onMove = (e) => {
@@ -1499,12 +1467,6 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
         }
         updateCamera();
       } else if (isDragging.current) {
-        // Only apply pivot if mouse has actually moved (threshold: 3px)
-        const moved = Math.abs(dx) + Math.abs(dy);
-        if (pendingPivot && moved > 2) {
-          applyPivot(pendingPivot);
-          pendingPivot = null;
-        }
         // Rotate
         rotation.current.y -= dx * 0.005;
         rotation.current.x += dy * 0.005;
@@ -1512,7 +1474,7 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
         updateCamera();
       }
     };
-    const onUp = () => { isDragging.current = false; isPanning.current = false; pendingPivot = null; };
+    const onUp = () => { isDragging.current = false; isPanning.current = false; };
     const onWheel = (e) => { e.preventDefault(); zoomRef.current = Math.max(0.05, Math.min(50, zoomRef.current * (1 + e.deltaY * 0.001))); updateCamera(); };
     const onContextMenu = (e) => { e.preventDefault(); }; // prevent right-click menu
 
