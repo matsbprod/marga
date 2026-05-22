@@ -55,11 +55,9 @@ const PHASES = [
 ];
 
 const STATUSES = [
-  { id: "backlog",     label: "Att göra",   icon: "○" },
-  { id: "ready",       label: "Redo",       icon: "◐" },
-  { id: "in_progress", label: "Pågående",   icon: "◑" },
-  { id: "review",      label: "Granskning", icon: "◕" },
-  { id: "done",        label: "Klart",      icon: "●" },
+  { id: "backlog",     label: "Att göra",  icon: "○" },
+  { id: "in_progress", label: "Pågående",  icon: "◑" },
+  { id: "done",        label: "Klart",     icon: "●" },
 ];
 
 
@@ -355,12 +353,44 @@ function fileOpenUrl(url) {
 }
 
 // ─── Lightbox ───
-function Lightbox({ src, caption, onClose }) {
+function Lightbox({ src, caption, onClose, images, currentIndex, onNavigate }) {
+  // images = [{src, caption}], currentIndex = number
+  const hasNav = images && images.length > 1;
+  const hasPrev = hasNav && currentIndex > 0;
+  const hasNext = hasNav && currentIndex < images.length - 1;
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && hasPrev) onNavigate(currentIndex - 1);
+      if (e.key === "ArrowRight" && hasNext) onNavigate(currentIndex + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [currentIndex, hasPrev, hasNext]);
+
   if (!src) return null;
+
+  const btnStyle = (enabled) => ({
+    position: "fixed", top: "50%", transform: "translateY(-50%)",
+    background: enabled ? "rgba(58,46,34,0.7)" : "rgba(58,46,34,0.2)",
+    border: "none", borderRadius: "50%", width: 44, height: 44,
+    color: enabled ? "#FFFDF8" : "rgba(255,253,248,0.3)",
+    fontSize: 20, cursor: enabled ? "pointer" : "default",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    zIndex: 3001, transition: "background 0.15s",
+  });
+
   return (
     <div className="lightbox" onClick={onClose}>
-      <img src={src} alt={caption || "Bild"} />
-      {caption && <div className="lightbox-caption">{caption}</div>}
+      <img src={src} alt={caption || "Bild"} onClick={e => e.stopPropagation()} />
+      {caption && <div className="lightbox-caption">{hasNav ? `${currentIndex + 1} / ${images.length} — ${caption}` : caption}</div>}
+      {hasPrev && (
+        <button style={{ ...btnStyle(true), left: 16 }} onClick={e => { e.stopPropagation(); onNavigate(currentIndex - 1); }}>‹</button>
+      )}
+      {hasNext && (
+        <button style={{ ...btnStyle(true), right: 16 }} onClick={e => { e.stopPropagation(); onNavigate(currentIndex + 1); }}>›</button>
+      )}
     </div>
   );
 }
@@ -508,7 +538,7 @@ function FileAttachments({ files, onChange, onPreview }) {
 }
 
 // ─── Kanban Card ───
-function KanbanCard({ task, phases, onEdit, onDragStart }) {
+function KanbanCard({ task, phases, onEdit, onDragStart, onDragOver, onDrop }) {
   const phase = phases.find(p => p.id === task.phase);
   const files = task.files || [];
   const filesByType = {};
@@ -518,6 +548,8 @@ function KanbanCard({ task, phases, onEdit, onDragStart }) {
     <div
       draggable
       onDragStart={e => { e.dataTransfer.setData("taskId", String(task.id)); onDragStart(task.id); }}
+      onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (onDragOver) onDragOver(task.id); }}
+      onDrop={e => { e.preventDefault(); e.stopPropagation(); if (onDrop) onDrop(e); }}
       onClick={() => onEdit(task)}
       style={{ background: "#FFFDF8", borderRadius: 8, padding: "10px 12px", marginBottom: 8, cursor: "grab", borderLeft: `4px solid ${phase?.color || "#aaa"}`, boxShadow: "0 1px 3px rgba(80,60,40,0.08)", transition: "box-shadow 0.15s, transform 0.15s", fontSize: 13 }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 3px 10px rgba(80,60,40,0.15)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
@@ -548,7 +580,8 @@ function KanbanCard({ task, phases, onEdit, onDragStart }) {
 }
 
 // ─── Kanban Column ───
-function KanbanColumn({ status, tasks, phases, onEdit, onDrop, onDragStart, dragOverStatus, setDragOverStatus }) {
+function KanbanColumn({ status, tasks, phases, onEdit, onDrop, onDragStart, dragOverStatus, setDragOverStatus, onReorder }) {
+  const dragOverCard = useRef(null);
   return (
     <div
       style={{ minWidth: 220, maxWidth: 260, flex: "1 1 220px", background: dragOverStatus === status.id ? "rgba(90,122,138,0.07)" : "transparent", borderRadius: 12, padding: 10, transition: "background 0.2s" }}
@@ -562,7 +595,10 @@ function KanbanColumn({ status, tasks, phases, onEdit, onDrop, onDragStart, drag
         <span style={{ marginLeft: "auto", fontSize: 11, background: "#E5DDD0", borderRadius: 10, padding: "1px 8px", color: "#6B5D4E", fontWeight: 600 }}>{tasks.length}</span>
       </div>
       <div style={{ minHeight: 40 }}>
-        {tasks.map(t => <KanbanCard key={t.id} task={t} phases={phases} onEdit={onEdit} onDragStart={onDragStart} />)}
+        {tasks.map(t => <KanbanCard key={t.id} task={t} phases={phases} onEdit={onEdit} onDragStart={onDragStart}
+        onDragOver={cardId => { dragOverCard.current = cardId; }}
+        onDrop={e => { const draggedId = parseInt(e.dataTransfer.getData("taskId")); if (onReorder && dragOverCard.current && draggedId !== dragOverCard.current) { onReorder(draggedId, dragOverCard.current, status.id); } dragOverCard.current = null; }}
+      />)}
       </div>
     </div>
   );
@@ -1192,9 +1228,11 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
                     const isPdf = file.name.toLowerCase().endsWith(".pdf");
                     const rawUrl = `${GITHUB_RAW}/${file.path}`;
                     const ext = file.name.split(".").pop().toUpperCase();
+                    const allImages = folderFiles.filter(f => isImageFile(f.name)).map(f => ({ src: `${GITHUB_RAW}/${f.path}`, caption: f.name }));
+                    const imgIndex = allImages.findIndex(i => i.src === rawUrl);
                     const is3dm = file.name.toLowerCase().endsWith(".3dm");
                     const handleClick = () => {
-                      if (isImg) onPreview(rawUrl, file.name);
+                      if (isImg) onPreview(rawUrl, file.name, allImages, imgIndex);
                       else if (isPdf) setPdfViewer({ url: rawUrl, name: file.name });
                       else if (is3dm && onOpen3dModel) onOpen3dModel(rawUrl);
                       else window.open(rawUrl, "_blank");
@@ -1957,7 +1995,16 @@ function App() {
   const [filterPhase, setFilterPhase] = useState("all");
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
-  const [lightbox, setLightbox] = useState(null);
+  const [lightbox, setLightbox] = useState(null); // { src, caption, images, currentIndex }
+
+  function openLightbox(src, caption, images, currentIndex) {
+    setLightbox({ src, caption, images: images || [], currentIndex: currentIndex ?? 0 });
+  }
+  function navigateLightbox(idx) {
+    if (!lightbox?.images) return;
+    const img = lightbox.images[idx];
+    if (img) setLightbox({ ...lightbox, src: img.src, caption: img.caption, currentIndex: idx });
+  }
   const [syncStatus, setSyncStatus] = useState(isJsonBinConfigured() ? "loading" : "offline");
   const [pending3dUrl, setPending3dUrl] = useState(null);
   const isInitialLoad = useRef(true);
@@ -2012,6 +2059,22 @@ function App() {
 
   const nextId = () => Math.max(0, ...tasks.map(t => t.id)) + 1;
   const handleDrop = (taskId, newStatus) => { setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t)); setDraggingId(null); showToast("Status uppdaterad ✓"); };
+
+  const handleReorder = (draggedId, targetId, statusId) => {
+    setTasks(prev => {
+      const columnTasks = prev.filter(t => t.status === statusId);
+      const otherTasks = prev.filter(t => t.status !== statusId);
+      const draggedIdx = columnTasks.findIndex(t => t.id === draggedId);
+      const targetIdx = columnTasks.findIndex(t => t.id === targetId);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      const reordered = [...columnTasks];
+      const [moved] = reordered.splice(draggedIdx, 1);
+      reordered.splice(targetIdx, 0, moved);
+      // Preserve overall order: put other tasks first, then reordered column
+      return [...otherTasks.filter(t => prev.indexOf(t) < prev.findIndex(t2 => t2.status === statusId)), ...reordered, ...otherTasks.filter(t => prev.indexOf(t) > prev.findLastIndex(t2 => t2.status === statusId))];
+    });
+    showToast("Ordning uppdaterad ✓");
+  };
   const handleSave = (form) => { if (form.id) { setTasks(prev => prev.map(t => t.id === form.id ? { ...form } : t)); } else { setTasks(prev => [...prev, { ...form, id: nextId() }]); } showToast(form.id ? "Uppgift sparad ✓" : "Uppgift tillagd ✓"); };
   const handleDelete = (id) => { setTasks(prev => prev.filter(t => t.id !== id)); showToast("Uppgift borttagen"); };
   const newTask = () => { setEditingTask({ id: 0, title: "", phase: "survey", status: "backlog", startWeek: 1, duration: 1, notes: "", files: [] }); };
@@ -2071,14 +2134,16 @@ function App() {
         {(view !== "gallery" && view !== "viewer3d") && <Stats tasks={tasks} />}
         {view === "board" ? (
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 16 }}>
-            {STATUSES.map(s => <KanbanColumn key={s.id} status={s} tasks={filteredTasks.filter(t => t.status === s.id)} phases={PHASES} onEdit={setEditingTask} onDrop={handleDrop} onDragStart={setDraggingId} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} />)}
+            {STATUSES.map(s => <KanbanColumn key={s.id} status={s} tasks={filteredTasks.filter(t => t.status === s.id)} phases={PHASES} onEdit={setEditingTask} onDrop={handleDrop} onDragStart={setDraggingId} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} onReorder={handleReorder} />)}
           </div>
         ) : view === "gantt" ? (
           <GanttChart tasks={tasks} phases={PHASES} onEdit={setEditingTask} filterPhase={filterPhase} />
         ) : view === "viewer3d" ? (
           <Rhino3DViewer pendingUrl={pending3dUrl} onPendingConsumed={() => setPending3dUrl(null)} />
         ) : (
-          <ImageGallery onPreview={(src, caption) => setLightbox({ src, caption })} folders={gallery} setFolders={setGallery}
+          <ImageGallery
+            onPreview={(src, caption, images, idx) => openLightbox(src, caption, images, idx)}
+            folders={gallery} setFolders={setGallery}
             onOpen3dModel={url => { setView("viewer3d"); setPending3dUrl(url); }} />
         )}
         {(view !== "gallery" && view !== "viewer3d") && (
@@ -2099,7 +2164,7 @@ function App() {
       </div>
 
       {editingTask && <TaskModal task={editingTask} phases={PHASES} onSave={handleSave} onDelete={handleDelete} onClose={() => setEditingTask(null)} onPreview={(src, caption) => setLightbox({ src, caption })} />}
-      {lightbox && <Lightbox src={lightbox.src} caption={lightbox.caption} onClose={() => setLightbox(null)} />}
+      {lightbox && <Lightbox src={lightbox.src} caption={lightbox.caption} images={lightbox.images} currentIndex={lightbox.currentIndex} onClose={() => setLightbox(null)} onNavigate={navigateLightbox} />}
     </div>
   );
 }
