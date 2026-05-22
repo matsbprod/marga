@@ -248,6 +248,9 @@ const GITHUB_REPO = "matsbprod/marga";
 const GITHUB_RAW = "https://raw.githubusercontent.com/matsbprod/marga/main";
 const GITHUB_API = "https://api.github.com/repos/matsbprod/marga/contents";
 
+// Read-only token for GitHub API (avoids 60 req/hr rate limit)
+const GITHUB_READ_TOKEN = "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";
+
 // Use upload account token for API reads if available (avoids 60 req/hr rate limit)
 function ghApiHeaders() {
   const saved = sessionStorage.getItem(UPLOAD_SESSION_KEY);
@@ -260,7 +263,7 @@ function ghApiHeaders() {
       }
     } catch(e) {}
   }
-  return { Accept: "application/vnd.github.v3+json" };
+  return { Accept: "application/vnd.github.v3+json", Authorization: `token ${GITHUB_READ_TOKEN}` };
 }
 const IMAGE_EXTS = ["jpg","jpeg","png","gif","webp","svg","bmp","tiff"];
 const DOC_EXTS   = ["pdf","dwg","dxf","step","stp","stl","3dm","doc","docx","xls","xlsx","txt"];
