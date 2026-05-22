@@ -2000,69 +2000,45 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
             </div>
           </div>
         )}
-        {/* Layer panel */}
-        {layers.length > 0 && (
+        {status === "ready" && (
           <div style={{
             position: "absolute", top: 10, right: 10, zIndex: 20,
             background: "rgba(255,253,248,0.92)", borderRadius: 8,
             border: "1px solid #E5DDD0", padding: "10px 12px",
             maxHeight: "calc(100% - 20px)", overflowY: "auto",
-            minWidth: 160, backdropFilter: "blur(8px)",
+            minWidth: 170, backdropFilter: "blur(8px)",
             boxShadow: "0 2px 12px rgba(58,46,34,0.1)",
           }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Lager</div>
-            {layers.map(l => (
-              <div
-                key={l.index}
-                onClick={() => toggleLayer(l.index)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8, padding: "4px 6px",
-                  borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: 500,
-                  color: l.visible ? "#3A2E22" : "#B0A898",
-                  background: l.visible ? "transparent" : "rgba(0,0,0,0.03)",
-                  transition: "all 0.15s",
-                  marginBottom: 2,
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
-                onMouseLeave={e => e.currentTarget.style.background = l.visible ? "transparent" : "rgba(0,0,0,0.03)"}
-              >
-                <span style={{
-                  width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                  border: `2px solid ${l.visible ? l.color : "#CCC"}`,
-                  background: l.visible ? l.color : "transparent",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 0.15s",
-                }}>
-                  {l.visible && <span style={{ color: "#fff", fontSize: 9, fontWeight: 800 }}>✓</span>}
-                </span>
-                <span style={{ textDecoration: l.visible ? "none" : "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
+            {layers.length > 0 && (<>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Lager</div>
+              {layers.map(l => (
+                <div key={l.index} onClick={() => toggleLayer(l.index)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: 500, color: l.visible ? "#3A2E22" : "#B0A898", background: l.visible ? "transparent" : "rgba(0,0,0,0.03)", transition: "all 0.15s", marginBottom: 2 }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+                  onMouseLeave={e => e.currentTarget.style.background = l.visible ? "transparent" : "rgba(0,0,0,0.03)"}
+                >
+                  <span style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0, border: `2px solid ${l.visible ? l.color : "#CCC"}`, background: l.visible ? l.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+                    {l.visible && <span style={{ color: "#fff", fontSize: 9, fontWeight: 800 }}>✓</span>}
+                  </span>
+                  <span style={{ textDecoration: l.visible ? "none" : "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</span>
+                </div>
+              ))}
+              <div style={{ height: 1, background: "#E5DDD0", margin: "10px 0" }} />
+            </>)}
 
-        {/* Clipping plane panel — bottom left */}
-        {status === "ready" && (
-          <div style={{
-            position: "absolute", bottom: 10, left: 10, zIndex: 20,
-            background: "rgba(255,253,248,0.92)", borderRadius: 8,
-            border: "1px solid #E5DDD0", padding: "10px 14px",
-            minWidth: 200, backdropFilter: "blur(8px)",
-            boxShadow: "0 2px 12px rgba(58,46,34,0.1)",
-          }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Genomskärning</div>
+            {/* Clipping planes */}
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Genomskärning</div>
             {["x","y","z"].map(axis => (
-              <div key={axis} style={{ marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12, fontWeight: 600, color: clips[axis].enabled ? "#3A2E22" : "#A89878", minWidth: 20 }}>
+              <div key={axis} style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12, fontWeight: 600, color: clips[axis].enabled ? "#3A2E22" : "#A89878", flex: 1 }}>
                     <input type="checkbox" checked={clips[axis].enabled}
                       onChange={e => setClips(c => ({ ...c, [axis]: { ...c[axis], enabled: e.target.checked } }))}
                       style={{ accentColor: axis === "x" ? "#C75B4A" : axis === "y" ? "#5B7F6E" : "#5A7A8A", width: 13, height: 13 }} />
                     {axis.toUpperCase()}
                   </label>
                   {clips[axis].enabled && (
-                    <button
-                      onClick={() => setClips(c => ({ ...c, [axis]: { ...c[axis], flipped: !c[axis].flipped } }))}
+                    <button onClick={() => setClips(c => ({ ...c, [axis]: { ...c[axis], flipped: !c[axis].flipped } }))}
                       title="Vänd riktning"
                       style={{ fontSize: 11, padding: "1px 6px", border: "1px solid #DDD5C8", borderRadius: 4, background: clips[axis].flipped ? "#E8EFF0" : "none", cursor: "pointer", color: "#6B5D4E" }}>
                       {clips[axis].flipped ? "←" : "→"}
