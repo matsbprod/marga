@@ -1364,6 +1364,42 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
   const [rhinoModule, setRhinoModule] = useState(null);
   const [layers, setLayers] = useState([]); // [{ name, color, visible, index }]
   const sceneObjects = useRef([]); // [{ threeObj, layerIndex }]
+  const [clips, setClips] = useState({
+    x: { enabled: false, value: 0, flipped: false },
+    y: { enabled: false, value: 0, flipped: false },
+    z: { enabled: false, value: 0, flipped: false },
+  });
+  const clipsRef = useRef(null);
+  const modelBounds = useRef({ min: new THREE.Vector3(-50,-50,-50), max: new THREE.Vector3(50,50,50) });
+
+  function applyClippingPlanes() {
+    if (!rendererRef.current) return;
+    const c = clipsRef.current;
+    if (!c) return;
+    const planes = [];
+    const b = modelBounds.current;
+    const axes = {
+      x: { normal: new THREE.Vector3(1,0,0), min: b.min.x, max: b.max.x },
+      y: { normal: new THREE.Vector3(0,1,0), min: b.min.y, max: b.max.y },
+      z: { normal: new THREE.Vector3(0,0,1), min: b.min.z, max: b.max.z },
+    };
+    for (const [key, ax] of Object.entries(axes)) {
+      if (c[key].enabled) {
+        const range = ax.max - ax.min;
+        const pos = ax.min + (c[key].value + 1) / 2 * range;
+        const normal = c[key].flipped ? ax.normal.clone().negate() : ax.normal.clone();
+        const constant = c[key].flipped ? pos : -pos;
+        planes.push(new THREE.Plane(normal, constant));
+      }
+    }
+    rendererRef.current.clippingPlanes = planes;
+    rendererRef.current.localClippingEnabled = planes.length > 0;
+  }
+
+  useEffect(() => {
+    clipsRef.current = clips;
+    applyClippingPlanes();
+  }, [clips]);
 
   // Load rhino3dm WASM module on mount
   useEffect(() => {
@@ -1864,6 +1900,12 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
 
         panOffset.current.set(0, 0, 0);
         zoomRef.current = Math.max(0.5, size / 40);
+
+        // Store bounds for clipping planes
+        modelBounds.current = {
+          min: new THREE.Vector3(minX - cx, minY - cy, minZ - cz),
+          max: new THREE.Vector3(maxX - cx, maxY - cy, maxZ - cz),
+        };
         updateCamera();
       }
 
@@ -1996,6 +2038,50 @@ function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
                 <span style={{ textDecoration: l.visible ? "none" : "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Clipping plane panel — bottom left */}
+        {status === "ready" && (
+          <div style={{
+            position: "absolute", bottom: 10, left: 10, zIndex: 20,
+            background: "rgba(255,253,248,0.92)", borderRadius: 8,
+            border: "1px solid #E5DDD0", padding: "10px 14px",
+            minWidth: 200, backdropFilter: "blur(8px)",
+            boxShadow: "0 2px 12px rgba(58,46,34,0.1)",
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Genomskärning</div>
+            {["x","y","z"].map(axis => (
+              <div key={axis} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12, fontWeight: 600, color: clips[axis].enabled ? "#3A2E22" : "#A89878", minWidth: 20 }}>
+                    <input type="checkbox" checked={clips[axis].enabled}
+                      onChange={e => setClips(c => ({ ...c, [axis]: { ...c[axis], enabled: e.target.checked } }))}
+                      style={{ accentColor: axis === "x" ? "#C75B4A" : axis === "y" ? "#5B7F6E" : "#5A7A8A", width: 13, height: 13 }} />
+                    {axis.toUpperCase()}
+                  </label>
+                  {clips[axis].enabled && (
+                    <button
+                      onClick={() => setClips(c => ({ ...c, [axis]: { ...c[axis], flipped: !c[axis].flipped } }))}
+                      title="Vänd riktning"
+                      style={{ fontSize: 11, padding: "1px 6px", border: "1px solid #DDD5C8", borderRadius: 4, background: clips[axis].flipped ? "#E8EFF0" : "none", cursor: "pointer", color: "#6B5D4E" }}>
+                      {clips[axis].flipped ? "←" : "→"}
+                    </button>
+                  )}
+                </div>
+                {clips[axis].enabled && (
+                  <input type="range" min="-100" max="100" value={Math.round(clips[axis].value * 100)}
+                    onChange={e => setClips(c => ({ ...c, [axis]: { ...c[axis], value: parseInt(e.target.value) / 100 } }))}
+                    style={{ width: "100%", accentColor: axis === "x" ? "#C75B4A" : axis === "y" ? "#5B7F6E" : "#5A7A8A", cursor: "pointer" }} />
+                )}
+              </div>
+            ))}
+            {(clips.x.enabled || clips.y.enabled || clips.z.enabled) && (
+              <button onClick={() => setClips({ x: { enabled: false, value: 0, flipped: false }, y: { enabled: false, value: 0, flipped: false }, z: { enabled: false, value: 0, flipped: false } })}
+                style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 2 }}>
+                Återställ alla
+              </button>
+            )}
           </div>
         )}
       </div>
