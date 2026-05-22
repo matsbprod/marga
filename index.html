@@ -667,13 +667,37 @@ function TaskModal({ task, onSave, onDelete, onClose, phases, onPreview }) {
 function GanttChart({ tasks, phases, onEdit, filterPhase }) {
   const filtered = filterPhase === "all" ? tasks : tasks.filter(t => t.phase === filterPhase);
   const sorted = [...filtered].sort((a, b) => a.startWeek - b.startWeek || a.phase.localeCompare(b.phase));
-  const weekWidth = 46, rowHeight = 34, labelWidth = 250;
+  const [weekWidth, setWeekWidth] = useState(46);
+  const rowHeight = 34, labelWidth = 250;
   const today = new Date(), projectStart = new Date(2026, 2, 2);
   const diffDays = Math.max(0, (today - projectStart) / (1000 * 60 * 60 * 24));
   const currentWeek = Math.min(TOTAL_WEEKS, 1 + diffDays / 7);
 
+  // Scroll to current week on mount
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    if (scrollRef.current) {
+      const scrollTo = Math.max(0, (currentWeek - 3) * weekWidth);
+      scrollRef.current.scrollLeft = scrollTo;
+    }
+  }, []);
+
   return (
-    <div style={{ overflow: "auto", borderRadius: 10, border: "1px solid #E5DDD0" }}>
+    <div>
+      {/* Zoom controls */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, justifyContent: "flex-end" }}>
+        <span style={{ fontSize: 11, color: "#8A7D6B", fontWeight: 600 }}>Zoom</span>
+        <button onClick={() => setWeekWidth(w => Math.max(20, w - 8))}
+          style={{ width: 26, height: 26, border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 15, color: "#5A4A38", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+        <input type="range" min="20" max="120" value={weekWidth} onChange={e => setWeekWidth(+e.target.value)}
+          style={{ width: 80, accentColor: "#5B7F6E", cursor: "pointer" }} />
+        <button onClick={() => setWeekWidth(w => Math.min(120, w + 8))}
+          style={{ width: 26, height: 26, border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 15, color: "#5A4A38", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        <button onClick={() => setWeekWidth(46)} title="Återställ zoom"
+          style={{ padding: "3px 8px", border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 10, color: "#8A7D6B", fontWeight: 600 }}>1:1</button>
+      </div>
+
+      <div ref={scrollRef} style={{ overflow: "auto", borderRadius: 10, border: "1px solid #E5DDD0" }}>
       <div style={{ display: "flex", minWidth: labelWidth + TOTAL_WEEKS * weekWidth }}>
         <div style={{ width: labelWidth, flexShrink: 0, borderRight: "1px solid #E5DDD0", background: "#FAF6EF" }}>
           <div style={{ height: 36, borderBottom: "1px solid #E5DDD0", padding: "8px 12px", fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Uppgift</div>
@@ -693,7 +717,7 @@ function GanttChart({ tasks, phases, onEdit, filterPhase }) {
             {Array.from({ length: TOTAL_WEEKS }, (_, i) => (
               <div key={i} style={{ width: weekWidth, flexShrink: 0, textAlign: "center", fontSize: 10, color: "#8A7D6B", padding: "4px 0", borderRight: "1px solid #F0EBE2", lineHeight: 1.2, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                 <div style={{ fontWeight: 700 }}>V{i + 1}</div>
-                <div>{getWeekLabel(i + 1)}</div>
+                {weekWidth >= 36 && <div>{getWeekLabel(i + 1)}</div>}
               </div>
             ))}
           </div>
