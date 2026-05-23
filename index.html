@@ -2198,40 +2198,46 @@ function App() {
         padding: "28px 32px 20px", color: "#FFFDF8",
         borderBottom: "3px solid #C9A84C",
       }}>
-        <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "stretch", gap: 0 }}>
           {/* Full-height thumbnail */}
-          <div style={{ display: "flex", alignItems: "stretch", gap: 20 }}>
-            <img src="https://raw.githubusercontent.com/matsbprod/marga/main/BILDER/2.%20Historiska%20bilder/Byggfoto%201.jpg"
-              alt="Marga III" style={{ width: 80, objectFit: "cover", borderRight: "2px solid #C9A84C", opacity: 0.85, margin: "-28px 0 -20px", flexShrink: 0 }} />
-            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              <h1 style={{ margin: "0 0 4px 0", fontFamily: "'Playfair Display', Georgia, serif", fontSize: 28, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                Marga III
-              </h1>
-              <p style={{ margin: 0, fontSize: 12, color: "#C9A84C", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>Projektplanering</p>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {view !== "gallery" && view !== "viewer3d" && <button onClick={newTask} style={{ padding: "10px 20px", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 2px 8px rgba(91,127,110,0.3)" }}>+ Ny uppgift</button>}
-          </div>
-        </div>
+          <img src="https://raw.githubusercontent.com/matsbprod/marga/main/BILDER/2.%20Historiska%20bilder/Byggfoto%201.jpg"
+            alt="Marga III" style={{ width: 80, objectFit: "cover", flexShrink: 0, margin: "-28px 20px -20px -32px", border: "2px solid #1E3A5F", opacity: 0.88 }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(201,168,76,0.3)" }}>
-            {[{ id: "board", label: "Tavla" }, { id: "gantt", label: "Gantt-schema" }, { id: "gallery", label: "Bildarkiv" }, { id: "viewer3d", label: "3D-vy" }].map(v => (
-              <button key={v.id} onClick={() => setView(v.id)} style={{ padding: "7px 18px", border: "none", background: view === v.id ? "rgba(201,168,76,0.25)" : "transparent", color: view === v.id ? "#C9A84C" : "#FFFDF8", fontWeight: view === v.id ? 700 : 400, fontSize: 13, cursor: "pointer", transition: "all 0.2s" }}>{v.label}</button>
-            ))}
-          </div>
-          <select value={filterPhase} onChange={e => setFilterPhase(e.target.value)} style={{ padding: "7px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 8, background: "rgba(255,253,248,0.08)", color: "#FFFDF8", fontSize: 13, cursor: "pointer", outline: "none", display: (view === "gallery" || view === "viewer3d") ? "none" : "block" }}>
-            <option value="all" style={{ color: "#3A2E22" }}>Alla faser</option>
-            {PHASES.map(p => <option key={p.id} value={p.id} style={{ color: "#3A2E22" }}>{p.label}</option>)}
-          </select>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-            <SyncIndicator status={syncStatus} />
-            {isJsonBinConfigured() && (
-              <button onClick={handleManualSync} title="Hämta senaste data från molnet" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>⟳ Synka</button>
-            )}
-            <button onClick={handleExport} title="Exportera backup" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↓ Backup</button>
-            <button onClick={handleImport} title="Importera backup" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↑ Importera</button>
+          {/* Right side: title + nav stacked */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            {/* Top row: title + new task button */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <h1 style={{ margin: "0 0 4px 0", fontFamily: "'Playfair Display', Georgia, serif", fontSize: 28, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Marga III
+                </h1>
+                <p style={{ margin: 0, fontSize: 12, color: "#C9A84C", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>Projektplanering</p>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {view !== "gallery" && view !== "viewer3d" && <button onClick={newTask} style={{ padding: "10px 20px", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 2px 8px rgba(91,127,110,0.3)" }}>+ Ny uppgift</button>}
+              </div>
+            </div>
+
+            {/* Bottom row: nav + filter + sync */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", background: "rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(201,168,76,0.3)" }}>
+                {[{ id: "board", label: "Tavla" }, { id: "gantt", label: "Gantt-schema" }, { id: "gallery", label: "Bildarkiv" }, { id: "viewer3d", label: "3D-vy" }].map(v => (
+                  <button key={v.id} onClick={() => setView(v.id)} style={{ padding: "7px 18px", border: "none", background: view === v.id ? "rgba(201,168,76,0.25)" : "transparent", color: view === v.id ? "#C9A84C" : "#FFFDF8", fontWeight: view === v.id ? 700 : 400, fontSize: 13, cursor: "pointer", transition: "all 0.2s" }}>{v.label}</button>
+                ))}
+              </div>
+              <select value={filterPhase} onChange={e => setFilterPhase(e.target.value)} style={{ padding: "7px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 8, background: "rgba(255,253,248,0.08)", color: "#FFFDF8", fontSize: 13, cursor: "pointer", outline: "none", display: (view === "gallery" || view === "viewer3d") ? "none" : "block" }}>
+                <option value="all" style={{ color: "#3A2E22" }}>Alla faser</option>
+                {PHASES.map(p => <option key={p.id} value={p.id} style={{ color: "#3A2E22" }}>{p.label}</option>)}
+              </select>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+                <SyncIndicator status={syncStatus} />
+                {isJsonBinConfigured() && (
+                  <button onClick={handleManualSync} title="Hämta senaste data från molnet" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>⟳ Synka</button>
+                )}
+                <button onClick={handleExport} title="Exportera backup" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↓ Backup</button>
+                <button onClick={handleImport} title="Importera backup" style={{ padding: "6px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 7, background: "transparent", color: "#C4B89E", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↑ Importera</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
