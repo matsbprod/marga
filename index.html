@@ -2208,10 +2208,10 @@ function App() {
             {/* Top row: title + new task button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <h1 style={{ margin: "0 0 4px 0", fontFamily: "'Playfair Display', Georgia, serif", fontSize: 28, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                <h1 style={{ margin: "0 0 6px 0", fontFamily: "'Playfair Display', Georgia, serif", fontSize: 36, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                   Marga III
                 </h1>
-                <p style={{ margin: 0, fontSize: 12, color: "#C9A84C", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>Projektplanering</p>
+                <p style={{ margin: "0 0 0 0", fontSize: 13, color: "#C9A84C", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" }}>Projektplanering</p>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 {view !== "gallery" && view !== "viewer3d" && <button onClick={newTask} style={{ padding: "10px 20px", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 2px 8px rgba(91,127,110,0.3)" }}>+ Ny uppgift</button>}
@@ -2219,7 +2219,7 @@ function App() {
             </div>
 
             {/* Bottom row: nav + filter + sync */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 20, flexWrap: "wrap" }}>
               <div style={{ display: "flex", background: "rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(201,168,76,0.3)" }}>
                 {[{ id: "board", label: "Tavla" }, { id: "gantt", label: "Gantt-schema" }, { id: "gallery", label: "Bildarkiv" }, { id: "viewer3d", label: "3D-vy" }].map(v => (
                   <button key={v.id} onClick={() => setView(v.id)} style={{ padding: "7px 18px", border: "none", background: view === v.id ? "rgba(201,168,76,0.25)" : "transparent", color: view === v.id ? "#C9A84C" : "#FFFDF8", fontWeight: view === v.id ? 700 : 400, fontSize: 13, cursor: "pointer", transition: "all 0.2s" }}>{v.label}</button>
