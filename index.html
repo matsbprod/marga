@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Renovering Marga III — Projektplanering</title>
+<title>Marga III — Projektplanering</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -12,7 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif; background: #F5F0E6; min-height: 100vh; }
+body { font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif; background: #EDF2F7; min-height: 100vh; }
 ::-webkit-scrollbar { height: 8px; width: 8px; }
 ::-webkit-scrollbar-track { background: #F0EBE2; border-radius: 4px; }
 ::-webkit-scrollbar-thumb { background: #C4B89E; border-radius: 4px; }
@@ -38,20 +38,20 @@ const { useState, useRef, useEffect, useCallback } = React;
 
 // ─── Constants ───
 const PHASES = [
-  { id: "köl",           label: "Blyköl",                              color: "#5A6B7A" },
-  { id: "däck",          label: "Däck och överbyggnader",              color: "#8B7355" },
-  { id: "el",            label: "Elinstallationer",                    color: "#D4A76A" },
-  { id: "motor",         label: "Motor",                               color: "#5B7F6E" },
+  { id: "blyköl",        label: "Blyköl",                              color: "#5A6B7A" },
+  { id: "däck",          label: "Däck",                                color: "#8B7355" },
+  { id: "el",            label: "El, vvs, toa installationer",          color: "#D4A76A" },
+  { id: "elmotor",       label: "Elmotor",                             color: "#5B7F6E" },
   { id: "inredning",     label: "Inredning",                           color: "#7D6B91" },
-  { id: "konstruktion",  label: "Konstruktion och CAD",                color: "#A67B5B" },
-  { id: "mast",          label: "Mast och bom",                        color: "#6E7F8D" },
+  { id: "konstruktion",  label: "Konstruktion och layout",             color: "#A67B5B" },
+  { id: "mast",          label: "Mast",                                color: "#6E7F8D" },
   { id: "material",      label: "Material",                            color: "#C49A6C" },
-  { id: "ytbehandling",  label: "Ytbehandling",                        color: "#4A7C6F" },
+  { id: "projektledning",label: "Projektledning",                      color: "#4A7C6F" },
   { id: "rivning",       label: "Rivning",                             color: "#C75B4A" },
   { id: "roder",         label: "Roder",                               color: "#5A7A8A" },
-  { id: "segel",         label: "Segel ocg rigg",                      color: "#7A8A5A" },
-  { id: "skrov",         label: "Skrov och bordläggning",              color: "#8B6347" },
-  { id: "spant",         label: "Spant och bottenstockar",             color: "#6B7A8B" },
+  { id: "segel",         label: "Segel",                               color: "#7A8A5A" },
+  { id: "skrov",         label: "Skrov, Spant, bottenstockar",         color: "#8B6347" },
+  { id: "överbyggnad",   label: "Överbyggnader. Ruff, Sittbrunn",      color: "#6B7A8B" },
 ];
 
 const STATUSES = [
@@ -2192,23 +2192,27 @@ function App() {
   const filteredTasks = filterPhase === "all" ? tasks : tasks.filter(t => t.phase === filterPhase);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F0E6" }}>
-      <div style={{ background: "linear-gradient(135deg, #3A2E22 0%, #5A4A38 100%)", padding: "28px 32px 20px", color: "#FFFDF8" }}>
+    <div style={{ minHeight: "100vh", background: "#F0F4F8" }}>
+      <div style={{
+        background: "linear-gradient(to bottom, rgba(10,22,40,0.82) 0%, rgba(10,22,40,0.92) 100%), url('https://raw.githubusercontent.com/matsbprod/marga/main/bilder/historiska%20bilder/Byggfoto%201.JPG') center/cover no-repeat",
+        padding: "28px 32px 20px", color: "#FFFDF8",
+        borderBottom: "3px solid #C9A84C",
+      }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
               <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                <path d="M4 22C4 22 8 12 16 12C24 12 28 22 28 22" stroke="#D4A76A" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M6 22H26" stroke="#D4A76A" strokeWidth="2" strokeLinecap="round" />
-                <path d="M16 8V12" stroke="#D4A76A" strokeWidth="2" strokeLinecap="round" />
-                <path d="M16 4L16 6" stroke="#D4A76A" strokeWidth="2" strokeLinecap="round" />
-                <path d="M14 5L18 5" stroke="#D4A76A" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M4 22C4 22 8 12 16 12C24 12 28 22 28 22" stroke="#C9A84C" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M6 22H26" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" />
+                <path d="M16 8V12" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" />
+                <path d="M16 4L16 6" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" />
+                <path d="M14 5L18 5" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
-              <h1 style={{ margin: 0, fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em" }}>
-                Renovering Marga III
+              <h1 style={{ margin: 0, fontFamily: "'Playfair Display', Georgia, serif", fontSize: 28, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Marga III
               </h1>
             </div>
-            <p style={{ margin: 0, fontSize: 13, color: "#C4B89E", fontWeight: 400 }}>Projektplanering</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#C9A84C", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>Projektplanering · Skärgårdskryssare 1918</p>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {view !== "gallery" && view !== "viewer3d" && <button onClick={newTask} style={{ padding: "10px 20px", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 2px 8px rgba(91,127,110,0.3)" }}>+ Ny uppgift</button>}
@@ -2216,9 +2220,9 @@ function App() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: "rgba(255,253,248,0.12)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(201,168,76,0.3)" }}>
             {[{ id: "board", label: "Tavla" }, { id: "gantt", label: "Gantt-schema" }, { id: "gallery", label: "Bildarkiv" }, { id: "viewer3d", label: "3D-vy" }].map(v => (
-              <button key={v.id} onClick={() => setView(v.id)} style={{ padding: "7px 18px", border: "none", background: view === v.id ? "rgba(255,253,248,0.22)" : "transparent", color: "#FFFDF8", fontWeight: view === v.id ? 700 : 400, fontSize: 13, cursor: "pointer", transition: "background 0.2s" }}>{v.label}</button>
+              <button key={v.id} onClick={() => setView(v.id)} style={{ padding: "7px 18px", border: "none", background: view === v.id ? "rgba(201,168,76,0.25)" : "transparent", color: view === v.id ? "#C9A84C" : "#FFFDF8", fontWeight: view === v.id ? 700 : 400, fontSize: 13, cursor: "pointer", transition: "all 0.2s" }}>{v.label}</button>
             ))}
           </div>
           <select value={filterPhase} onChange={e => setFilterPhase(e.target.value)} style={{ padding: "7px 12px", border: "1px solid rgba(255,253,248,0.2)", borderRadius: 8, background: "rgba(255,253,248,0.08)", color: "#FFFDF8", fontSize: 13, cursor: "pointer", outline: "none", display: (view === "gallery" || view === "viewer3d") ? "none" : "block" }}>
