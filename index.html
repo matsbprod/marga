@@ -2195,16 +2195,21 @@ function App() {
     <div style={{ minHeight: "100vh", background: "#F0F4F8" }}>
       <div style={{
         background: "linear-gradient(to bottom, rgba(10,22,40,0.82) 0%, rgba(10,22,40,0.92) 100%), url('https://raw.githubusercontent.com/matsbprod/marga/main/BILDER/2.%20Historiska%20bilder/Byggfoto%201.jpg') center/cover no-repeat",
-        padding: "36px 32px 28px", color: "#FFFDF8",
+        color: "#FFFDF8",
         borderBottom: "3px solid #C9A84C",
+        position: "relative",
+        display: "flex",
+        alignItems: "stretch",
+        minHeight: 140,
       }}>
-        <div style={{ display: "flex", alignItems: "stretch", gap: 0, margin: "-36px -32px -28px", minHeight: 140 }}>
-          {/* Full-height thumbnail */}
+        {/* Full-height thumbnail — absolute left panel */}
+        <div style={{ width: 160, flexShrink: 0, borderRight: "4px solid #1E3A5F", overflow: "hidden" }}>
           <img src="https://raw.githubusercontent.com/matsbprod/marga/main/BILDER/2.%20Historiska%20bilder/Byggfoto%201.jpg"
-            alt="Marga III" style={{ height: "100%", width: "auto", objectFit: "contain", flexShrink: 0, marginRight: 24, border: "4px solid #1E3A5F", opacity: 0.88, display: "block" }} />
+            alt="Marga III" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.88, display: "block" }} />
+        </div>
 
-          {/* Right side: title + nav stacked */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "28px 32px 20px 0" }}>
+        {/* Right side: title + nav stacked */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "28px 32px 20px 24px" }}>
             {/* Top row: title + new task button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
@@ -2239,7 +2244,6 @@ function App() {
               </div>
             </div>
           </div>
-        </div>
       </div>
 
       <div style={{ padding: "24px 24px 40px", maxWidth: 1440, margin: "0 auto" }}>
