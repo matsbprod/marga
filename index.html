@@ -2198,13 +2198,13 @@ function App() {
         padding: "36px 32px 28px", color: "#FFFDF8",
         borderBottom: "3px solid #C9A84C",
       }}>
-        <div style={{ display: "flex", alignItems: "stretch", gap: 0, margin: "-36px -32px -28px", padding: "8px 8px 8px 8px" }}>
+        <div style={{ display: "flex", alignItems: "stretch", gap: 0, margin: "-36px -32px -28px", minHeight: 140 }}>
           {/* Full-height thumbnail */}
           <img src="https://raw.githubusercontent.com/matsbprod/marga/main/BILDER/2.%20Historiska%20bilder/Byggfoto%201.jpg"
-            alt="Marga III" style={{ width: 90, objectFit: "cover", flexShrink: 0, marginRight: 20, border: "3px solid #1E3A5F", opacity: 0.88, alignSelf: "stretch" }} />
+            alt="Marga III" style={{ height: "100%", width: "auto", objectFit: "contain", flexShrink: 0, marginRight: 24, border: "4px solid #1E3A5F", opacity: 0.88, display: "block" }} />
 
           {/* Right side: title + nav stacked */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "28px 32px 20px 0" }}>
             {/* Top row: title + new task button */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
