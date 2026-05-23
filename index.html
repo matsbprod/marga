@@ -2198,21 +2198,17 @@ function App() {
         padding: "28px 32px 20px", color: "#FFFDF8",
         borderBottom: "3px solid #C9A84C",
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-              <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                <path d="M4 22C4 22 8 12 16 12C24 12 28 22 28 22" stroke="#C9A84C" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M6 22H26" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" />
-                <path d="M16 8V12" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" />
-                <path d="M16 4L16 6" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" />
-                <path d="M14 5L18 5" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-              <h1 style={{ margin: 0, fontFamily: "'Playfair Display', Georgia, serif", fontSize: 28, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+          {/* Full-height thumbnail */}
+          <div style={{ display: "flex", alignItems: "stretch", gap: 20 }}>
+            <img src="https://raw.githubusercontent.com/matsbprod/marga/main/BILDER/2.%20Historiska%20bilder/Byggfoto%201.jpg"
+              alt="Marga III" style={{ width: 80, objectFit: "cover", borderRight: "2px solid #C9A84C", opacity: 0.85, margin: "-28px 0 -20px", flexShrink: 0 }} />
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <h1 style={{ margin: "0 0 4px 0", fontFamily: "'Playfair Display', Georgia, serif", fontSize: 28, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                 Marga III
               </h1>
+              <p style={{ margin: 0, fontSize: 12, color: "#C9A84C", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>Projektplanering</p>
             </div>
-            <p style={{ margin: 0, fontSize: 12, color: "#C9A84C", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>Projektplanering</p>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {view !== "gallery" && view !== "viewer3d" && <button onClick={newTask} style={{ padding: "10px 20px", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 2px 8px rgba(91,127,110,0.3)" }}>+ Ny uppgift</button>}
