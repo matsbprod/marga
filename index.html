@@ -1113,7 +1113,6 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
         const subDirs = subItems.filter(i => i.type === "dir");
         if (subDirs.length > 0) {
           for (const sd of subDirs) {
-            const firstImg = subItems.find(i => i.type === "file" && isImageFile(i.name));
             allFolders.push({ path: sd.path, name: sd.name, parent: dir.name, thumb: null });
           }
           // Fetch thumbnails for each subfolder
@@ -1122,14 +1121,27 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
             if (!subRes.ok) continue;
             const subSubItems = await subRes.json();
             const firstImg = subSubItems.find(i => i.type === "file" && isImageFile(i.name));
+            const first3dm = subSubItems.find(i => i.type === "file" && i.name.toLowerCase().endsWith(".3dm"));
+            const firstPdf = subSubItems.find(i => i.type === "file" && i.name.toLowerCase().endsWith(".pdf"));
             const folderEntry = allFolders.find(f => f.path === sd.path);
-            if (folderEntry && firstImg) folderEntry.thumb = `${GITHUB_RAW}/${sd.path}/${firstImg.name}`;
+            if (folderEntry) {
+              if (firstImg) folderEntry.thumb = `${GITHUB_RAW}/${sd.path}/${firstImg.name}`;
+              else if (firstPdf) folderEntry.hasPdf = true;
+              else if (first3dm) folderEntry.has3dm = true;
+            }
           }
         } else {
           const hasFiles = subItems.some(i => i.type === "file" && (isImageFile(i.name) || isDocFile(i.name)));
           if (hasFiles) {
             const firstImg = subItems.find(i => i.type === "file" && isImageFile(i.name));
-            allFolders.push({ path: dir.path, name: dir.name, parent: "", thumb: firstImg ? `${GITHUB_RAW}/${dir.path}/${firstImg.name}` : null });
+            const firstPdf = subItems.find(i => i.type === "file" && i.name.toLowerCase().endsWith(".pdf"));
+            const first3dm = subItems.find(i => i.type === "file" && i.name.toLowerCase().endsWith(".3dm"));
+            allFolders.push({
+              path: dir.path, name: dir.name, parent: "",
+              thumb: firstImg ? `${GITHUB_RAW}/${dir.path}/${firstImg.name}` : null,
+              hasPdf: !!firstPdf,
+              has3dm: !!first3dm,
+            });
           }
         }
       }
@@ -1169,6 +1181,30 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
     acc[key].push(f);
     return acc;
   }, {});
+
+  // Sort groups: PDF first, then BILDER, then rest
+  const groupOrder = ["PDF", "BILDER", "Övrigt"];
+  const sortedGroups = Object.entries(groupedFolders).sort(([a], [b]) => {
+    const ai = groupOrder.findIndex(g => g.toLowerCase() === a.toLowerCase());
+    const bi = groupOrder.findIndex(g => g.toLowerCase() === b.toLowerCase());
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  function folderThumb(f) {
+    const nameLower = f.path.toLowerCase();
+    const is3d = nameLower.includes("3d") || nameLower.includes("modell") || f.has3dm;
+    const isPdfFolder = nameLower.includes("pdf") || (f.parent || "").toLowerCase() === "pdf" || f.hasPdf;
+
+    if (f.thumb) {
+      return (
+        <img src={f.thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onError={e => { e.target.style.display = "none"; e.target.parentNode.innerHTML = '<span style="font-size:18px">📁</span>'; }} />
+      );
+    }
+    if (isPdfFolder) return <span style={{ fontSize: 20 }}>📄</span>;
+    if (is3d) return <span style={{ fontSize: 20 }}>◈</span>;
+    return <span style={{ fontSize: 18 }}>📁</span>;
+  }
 
   function saveToken() {
     setGithubReadToken(tokenInput.trim());
@@ -1241,7 +1277,7 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
           {ghLoading && !activeFolder && (
             <div style={{ color: "#A89878", fontSize: 12, padding: 12 }}>Hämtar mappar…</div>
           )}
-          {Object.entries(groupedFolders).map(([group, foldersInGroup]) => (
+          {sortedGroups.map(([group, foldersInGroup]) => (
             <div key={group} style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#A89878", textTransform: "uppercase", letterSpacing: "0.06em", padding: "4px 8px", marginBottom: 4 }}>{group}</div>
               {foldersInGroup.map(f => (
@@ -1258,14 +1294,8 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
                   onMouseEnter={e => { if (activeFolder?.path !== f.path) e.currentTarget.style.background = "rgba(255,253,248,0.5)"; }}
                   onMouseLeave={e => { if (activeFolder?.path !== f.path) e.currentTarget.style.background = "transparent"; }}
                 >
-                  {/* Thumbnail or folder icon */}
                   <div style={{ width: 36, height: 36, borderRadius: 6, overflow: "hidden", flexShrink: 0, background: "#E8E0D4", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {f.thumb ? (
-                      <img src={f.thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        onError={e => { e.target.style.display = "none"; e.target.parentNode.innerHTML = '<span style="font-size:18px">📁</span>'; }} />
-                    ) : (
-                      <span style={{ fontSize: 18 }}>📁</span>
-                    )}
+                    {folderThumb(f)}
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#3A2E22", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
                 </div>
