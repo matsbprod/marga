@@ -666,7 +666,7 @@ function TaskModal({ task, onSave, onDelete, onClose, phases, onPreview }) {
 }
 
 // ─── Gantt Chart ───
-function GanttChart({ tasks, phases, onEdit, filterPhase }) {
+function GanttChart({ tasks, phases, onEdit, filterPhase, onUpdateTask }) {
   const filtered = filterPhase === "all" ? tasks : tasks.filter(t => t.phase === filterPhase);
   const sorted = [...filtered].sort((a, b) => a.startWeek - b.startWeek || a.phase.localeCompare(b.phase));
   const [weekWidth, setWeekWidth] = useState(46);
@@ -675,28 +675,72 @@ function GanttChart({ tasks, phases, onEdit, filterPhase }) {
   const diffDays = Math.max(0, (today - projectStart) / (1000 * 60 * 60 * 24));
   const currentWeek = Math.min(TOTAL_WEEKS, 1 + diffDays / 7);
 
-  // Scroll to current week on mount
   const scrollRef = useRef(null);
+  const dragging = useRef(null);
+  const [dragState, setDragState] = useState({});
+  const dragStateRef = useRef({});
+
+  function updateDragState(taskId, val) {
+    dragStateRef.current = { ...dragStateRef.current, [taskId]: val };
+    setDragState({ ...dragStateRef.current });
+  }
+
   useEffect(() => {
     if (scrollRef.current) {
-      const scrollTo = Math.max(0, (currentWeek - 3) * weekWidth);
-      scrollRef.current.scrollLeft = scrollTo;
+      scrollRef.current.scrollLeft = Math.max(0, (currentWeek - 3) * weekWidth);
     }
   }, []);
 
+  function onBarMouseDown(e, task, mode) {
+    e.stopPropagation();
+    e.preventDefault();
+    dragging.current = { taskId: task.id, mode, startX: e.clientX, origStart: task.startWeek, origDuration: task.duration };
+    updateDragState(task.id, { startWeek: task.startWeek, duration: task.duration });
+
+    function onMouseMove(ev) {
+      if (!dragging.current) return;
+      const dx = ev.clientX - dragging.current.startX;
+      const dWeeks = Math.round(dx / weekWidth);
+      const { taskId, mode, origStart, origDuration } = dragging.current;
+      const cur = dragStateRef.current[taskId] || { startWeek: origStart, duration: origDuration };
+      if (mode === "move") {
+        updateDragState(taskId, { startWeek: Math.max(1, Math.min(TOTAL_WEEKS, origStart + dWeeks)), duration: cur.duration });
+      } else {
+        updateDragState(taskId, { startWeek: cur.startWeek, duration: Math.max(1, Math.min(TOTAL_WEEKS - origStart + 1, origDuration + dWeeks)) });
+      }
+    }
+
+    function onMouseUp() {
+      if (!dragging.current) return;
+      const { taskId } = dragging.current;
+      const updated = dragStateRef.current[taskId];
+      if (updated) onUpdateTask(taskId, updated);
+      dragging.current = null;
+      delete dragStateRef.current[taskId];
+      setDragState({ ...dragStateRef.current });
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    }
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }
+
+  // Use dragState for live preview
+  function getBar(t) {
+    const ds = dragState[t.id];
+    return { startWeek: ds?.startWeek ?? t.startWeek, duration: ds?.duration ?? t.duration };
+  }
+
   return (
     <div>
-      {/* Zoom controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, justifyContent: "flex-end" }}>
         <span style={{ fontSize: 11, color: "#8A7D6B", fontWeight: 600 }}>Zoom</span>
-        <button onClick={() => setWeekWidth(w => Math.max(20, w - 8))}
-          style={{ width: 26, height: 26, border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 15, color: "#5A4A38", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <input type="range" min="20" max="120" value={weekWidth} onChange={e => setWeekWidth(+e.target.value)}
-          style={{ width: 80, accentColor: "#5B7F6E", cursor: "pointer" }} />
-        <button onClick={() => setWeekWidth(w => Math.min(120, w + 8))}
-          style={{ width: 26, height: 26, border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 15, color: "#5A4A38", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-        <button onClick={() => setWeekWidth(46)} title="Återställ zoom"
-          style={{ padding: "3px 8px", border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 10, color: "#8A7D6B", fontWeight: 600 }}>1:1</button>
+        <button onClick={() => setWeekWidth(w => Math.max(20, w - 8))} style={{ width: 26, height: 26, border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 15, color: "#5A4A38", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+        <input type="range" min="20" max="120" value={weekWidth} onChange={e => setWeekWidth(+e.target.value)} style={{ width: 80, accentColor: "#5B7F6E", cursor: "pointer" }} />
+        <button onClick={() => setWeekWidth(w => Math.min(120, w + 8))} style={{ width: 26, height: 26, border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 15, color: "#5A4A38", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        <button onClick={() => setWeekWidth(46)} style={{ padding: "3px 8px", border: "1px solid #DDD5C8", borderRadius: 6, background: "#FAF6EF", cursor: "pointer", fontSize: 10, color: "#8A7D6B", fontWeight: 600 }}>1:1</button>
+        <span style={{ fontSize: 10, color: "#A89878", marginLeft: 8 }}>Dra för att flytta · Dra i kanten för att ändra längd</span>
       </div>
 
       <div ref={scrollRef} style={{ overflow: "auto", borderRadius: 10, border: "1px solid #E5DDD0" }}>
@@ -727,13 +771,35 @@ function GanttChart({ tasks, phases, onEdit, filterPhase }) {
             <div style={{ position: "absolute", left: (currentWeek - 1) * weekWidth + weekWidth / 2 - 1, top: 0, bottom: 0, width: 2, background: "#C75B4A", opacity: 0.5, zIndex: 5, pointerEvents: "none" }} />
             {sorted.map(t => {
               const phase = phases.find(p => p.id === t.phase);
-              const left = (t.startWeek - 1) * weekWidth, width = t.duration * weekWidth - 4;
+              const { startWeek, duration } = getBar(t);
+              const left = (startWeek - 1) * weekWidth;
+              const width = duration * weekWidth - 4;
+              const isDraggingThis = !!dragState[t.id];
               const isDone = t.status === "done", isInProgress = t.status === "in_progress";
               return (
                 <div key={t.id} style={{ height: rowHeight, position: "relative", borderBottom: "1px solid #F0EBE2" }}>
                   {Array.from({ length: TOTAL_WEEKS }, (_, i) => <div key={i} style={{ position: "absolute", left: i * weekWidth, top: 0, bottom: 0, width: 1, background: "#F0EBE2" }} />)}
-                  <div onClick={() => onEdit(t)} style={{ position: "absolute", left: left + 2, top: 6, width: Math.max(width, 16), height: rowHeight - 12, background: isDone ? `repeating-linear-gradient(135deg, ${phase?.color}CC, ${phase?.color}CC 4px, ${phase?.color}99 4px, ${phase?.color}99 8px)` : isInProgress ? `linear-gradient(90deg, ${phase?.color}, ${phase?.color}BB)` : `${phase?.color}55`, borderRadius: 5, cursor: "pointer", border: `1.5px solid ${phase?.color}`, transition: "transform 0.12s", display: "flex", alignItems: "center", paddingLeft: 6, overflow: "hidden" }} onMouseEnter={e => e.currentTarget.style.transform = "scaleY(1.15)"} onMouseLeave={e => e.currentTarget.style.transform = "scaleY(1)"}>
-                    {width > 50 && <span style={{ fontSize: 10, fontWeight: 600, color: isDone || isInProgress ? "#fff" : "#3A2E22", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: isDone || isInProgress ? "0 1px 2px rgba(0,0,0,0.2)" : "none" }}>{t.title}</span>}
+                  <div
+                    style={{ position: "absolute", left: left + 2, top: 6, width: Math.max(width, 16), height: rowHeight - 12,
+                      background: isDone ? `repeating-linear-gradient(135deg, ${phase?.color}CC, ${phase?.color}CC 4px, ${phase?.color}99 4px, ${phase?.color}99 8px)` : isInProgress ? `linear-gradient(90deg, ${phase?.color}, ${phase?.color}BB)` : `${phase?.color}55`,
+                      borderRadius: 5, border: `1.5px solid ${phase?.color}${isDraggingThis ? "" : ""}`,
+                      boxShadow: isDraggingThis ? "0 4px 16px rgba(0,0,0,0.25)" : "none",
+                      cursor: "grab", display: "flex", alignItems: "center", paddingLeft: 6, overflow: "hidden",
+                      transform: isDraggingThis ? "scaleY(1.15)" : "scaleY(1)", transition: isDraggingThis ? "none" : "transform 0.12s",
+                      userSelect: "none", zIndex: isDraggingThis ? 10 : 1,
+                    }}
+                    onMouseDown={e => onBarMouseDown(e, { ...t, startWeek, duration }, "move")}
+                    onDoubleClick={() => onEdit(t)}
+                  >
+                    {width > 50 && <span style={{ fontSize: 10, fontWeight: 600, color: isDone || isInProgress ? "#fff" : "#3A2E22", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: isDone || isInProgress ? "0 1px 2px rgba(0,0,0,0.2)" : "none", flex: 1 }}>{t.title}</span>}
+                    {/* Resize handle — right edge */}
+                    <div
+                      onMouseDown={e => { e.stopPropagation(); onBarMouseDown(e, { ...t, startWeek, duration }, "resize"); }}
+                      style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 8, cursor: "ew-resize", background: `${phase?.color}88`, borderRadius: "0 4px 4px 0", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >
+                      <div style={{ width: 2, height: 10, background: phase?.color, borderRadius: 1, margin: "0 1px" }} />
+                      <div style={{ width: 2, height: 10, background: phase?.color, borderRadius: 1 }} />
+                    </div>
                   </div>
                 </div>
               );
@@ -2198,6 +2264,10 @@ function App() {
   const nextId = () => Math.max(0, ...tasks.map(t => t.id)) + 1;
   const handleDrop = (taskId, newStatus) => { setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t)); setDraggingId(null); showToast("Status uppdaterad ✓"); };
 
+  const handleUpdateTask = (taskId, updates) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+  };
+
   const handleReorder = (draggedId, targetId, statusId) => {
     setTasks(prev => {
       const columnTasks = prev.filter(t => t.status === statusId);
@@ -2285,7 +2355,7 @@ function App() {
             {STATUSES.map(s => <KanbanColumn key={s.id} status={s} tasks={filteredTasks.filter(t => t.status === s.id)} phases={PHASES} onEdit={setEditingTask} onDrop={handleDrop} onDragStart={setDraggingId} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} onReorder={handleReorder} />)}
           </div>
         ) : view === "gantt" ? (
-          <GanttChart tasks={tasks} phases={PHASES} onEdit={setEditingTask} filterPhase={filterPhase} />
+          <GanttChart tasks={tasks} phases={PHASES} onEdit={setEditingTask} filterPhase={filterPhase} onUpdateTask={handleUpdateTask} />
         ) : view === "viewer3d" ? (
           <Rhino3DViewer pendingUrl={pending3dUrl} onPendingConsumed={() => setPending3dUrl(null)} />
         ) : (
