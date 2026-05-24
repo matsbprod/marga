@@ -38,20 +38,21 @@ const { useState, useRef, useEffect, useCallback } = React;
 
 // ─── Constants ───
 const PHASES = [
-  { id: "blyköl",        label: "Blyköl",                              color: "#5A6B7A" },
-  { id: "däck",          label: "Däck",                                color: "#8B7355" },
-  { id: "el",            label: "El, vvs, toa installationer",          color: "#D4A76A" },
-  { id: "elmotor",       label: "Elmotor",                             color: "#5B7F6E" },
-  { id: "inredning",     label: "Inredning",                           color: "#7D6B91" },
-  { id: "konstruktion",  label: "Konstruktion och layout",             color: "#A67B5B" },
-  { id: "mast",          label: "Mast",                                color: "#6E7F8D" },
-  { id: "material",      label: "Material",                            color: "#C49A6C" },
-  { id: "projektledning",label: "Projektledning",                      color: "#4A7C6F" },
-  { id: "rivning",       label: "Rivning",                             color: "#C75B4A" },
-  { id: "roder",         label: "Roder",                               color: "#5A7A8A" },
-  { id: "segel",         label: "Segel",                               color: "#7A8A5A" },
-  { id: "skrov",         label: "Skrov, Spant, bottenstockar",         color: "#8B6347" },
-  { id: "överbyggnad",   label: "Överbyggnader. Ruff, Sittbrunn",      color: "#6B7A8B" },
+  { id: "Mallställ och resning",                 label: "Mallställ och resning",                              color: "#5A6B7A" },
+  { id: "CAD design och konstruktion",           label: "CAD design och konstruktion",                                color: "#8B7355" },
+  { id: "Rivning och demontering",               label: "Rivning och demontering",          color: "#D4A76A" },
+  { id: "Spant och bottenstockar",               label: "Spant och bottenstockar",                             color: "#5B7F6E" },
+  { id: "Skrov och bordläggning",                label: "Skrov och bordläggning",                           color: "#7D6B91" },
+  { id: "Virke och material",                    label: "Virke och material",             color: "#A67B5B" },
+  { id: "Däck och överbyggnader",                label: "Däck och överbyggnader",                                color: "#6E7F8D" },
+  { id: "Ytbehandling",                          label: "Ytbehandling",                            color: "#C49A6C" },
+  { id: "Inredning",                             label: "Inredning",                      color: "#4A7C6F" },
+  { id: "El och instrument",                     label: "El och instrument",                             color: "#C75B4A" },
+  { id: "Övriga installationer",                 label: "Övriga installationer",                               color: "#5A7A8A" },
+  { id: "Mast och bom",                          label: "Mast och bom",                               color: "#7A8A5A" },
+  { id: "Segel och rigg",                        label: "Segel och rigg",         color: "#8B6347" },
+  { id: "Roder",                                 label: "Roder",      color: "#6B7A8B" },
+  { id: "Köl",                                   label: "Köl",      color: "#6B7A8B" },
 ];
 
 const STATUSES = [
