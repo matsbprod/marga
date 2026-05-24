@@ -668,7 +668,7 @@ function TaskModal({ task, onSave, onDelete, onClose, phases, onPreview }) {
 // ─── Gantt Chart ───
 function GanttChart({ tasks, phases, onEdit, filterPhase, onUpdateTask }) {
   const filtered = filterPhase === "all" ? tasks : tasks.filter(t => t.phase === filterPhase);
-  const sorted = [...filtered].sort((a, b) => a.startWeek - b.startWeek || a.phase.localeCompare(b.phase));
+  const sorted = filtered; // Preserve tasks array order (same as kanban)
   const [weekWidth, setWeekWidth] = useState(46);
   const rowHeight = 34, labelWidth = 250;
   const today = new Date(), projectStart = new Date(2026, 2, 2);
