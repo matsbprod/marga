@@ -182,6 +182,12 @@ const DOC_EXTS   = ["pdf","dwg","dxf","step","stp","stl","3dm","doc","docx","xls
 function isImageFile(name) { const ext = name.split(".").pop().toLowerCase(); return IMAGE_EXTS.includes(ext); }
 function isDocFile(name)   { const ext = name.split(".").pop().toLowerCase(); return DOC_EXTS.includes(ext); }
 
+function getWeekLabel(week) {
+  const d = new Date(2026, 2, 2);
+  d.setDate(d.getDate() + (week - 1) * 7);
+  return d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+}
+
 const DEFAULT_FOLDERS = [];
 
 function loadTasksLocal() {
