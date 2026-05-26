@@ -2323,9 +2323,7 @@ const SUPABASE_URL = "https://pkgqqprxbxgvimflpuhj.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBrZ3FxcHJ4YnhndmltZmxwdWhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3OTM4ODAsImV4cCI6MjA5NTM2OTg4MH0.ySgjEbqnTOh25IWxFhoIRhTKPdMHUHxgz7sUEvAQak8";
 const SUPABASE_TABLE = "datat";
 const SUPABASE_ROW_ID = 1;
-
 function isJsonBinConfigured() { return true; }
-function isCloudConfigured() { return true; }
 
 function normalizeTasks(arr) {
   if (!Array.isArray(arr)) return null;
@@ -4577,9 +4575,7 @@ function normalizeTasks(arr) {
 
 async function loadFromCloud() {
   try {
-    const res = await fetch(SUPABASE_URL + "/rest/v1/" + SUPABASE_TABLE + "?id=eq." + SUPABASE_ROW_ID + "&select=content", {
-      headers: sbHeaders()
-    });
+    const res = await fetch(SUPABASE_URL + "/rest/v1/" + SUPABASE_TABLE + "?id=eq." + SUPABASE_ROW_ID + "&select=content", { headers: sbHeaders() });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const rows = await res.json();
     if (!rows || rows.length === 0) return null;
@@ -4587,19 +4583,16 @@ async function loadFromCloud() {
     if (Array.isArray(record)) return { tasks: normalizeTasks(record), gallery: null };
     if (record && record.tasks) return { tasks: normalizeTasks(record.tasks), gallery: record.gallery || null };
     return null;
-  } catch (e) { console.warn("Kunde inte hämta från Supabase:", e); return null; }
+  } catch (e) { console.warn("Supabase load error:", e); return null; }
 }
 
 async function saveToCloud(tasks, gallery) {
   try {
-    const content = JSON.stringify({ tasks, gallery });
-    const res = await fetch(SUPABASE_URL + "/rest/v1/" + SUPABASE_TABLE, {
-      method: "POST",
-      headers: Object.assign({}, sbHeaders(), { "Prefer": "resolution=merge-duplicates" }),
-      body: JSON.stringify({ id: SUPABASE_ROW_ID, content: content }),
-    });
+    const body = JSON.stringify({ id: SUPABASE_ROW_ID, content: JSON.stringify({ tasks, gallery }) });
+    const headers = Object.assign({}, sbHeaders(), { "Prefer": "resolution=merge-duplicates" });
+    const res = await fetch(SUPABASE_URL + "/rest/v1/" + SUPABASE_TABLE, { method: "POST", headers: headers, body: body });
     return res.ok || res.status === 201;
-  } catch (e) { console.warn("Kunde inte spara till Supabase:", e); return false; }
+  } catch (e) { console.warn("Supabase save error:", e); return false; }
 }
 
 
@@ -6813,9 +6806,7 @@ const SUPABASE_URL = "https://pkgqqprxbxgvimflpuhj.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBrZ3FxcHJ4YnhndmltZmxwdWhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3OTM4ODAsImV4cCI6MjA5NTM2OTg4MH0.ySgjEbqnTOh25IWxFhoIRhTKPdMHUHxgz7sUEvAQak8";
 const SUPABASE_TABLE = "datat";
 const SUPABASE_ROW_ID = 1;
-
 function isJsonBinConfigured() { return true; }
-function isCloudConfigured() { return true; }
 
 function normalizeTasks(arr) {
   if (!Array.isArray(arr)) return null;
