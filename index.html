@@ -182,16 +182,6 @@ const DOC_EXTS   = ["pdf","dwg","dxf","step","stp","stl","3dm","doc","docx","xls
 function isImageFile(name) { const ext = name.split(".").pop().toLowerCase(); return IMAGE_EXTS.includes(ext); }
 function isDocFile(name)   { const ext = name.split(".").pop().toLowerCase(); return DOC_EXTS.includes(ext); }
 
-function detectFileType(nameOrUrl) {
-  if (!nameOrUrl) return "doc";
-  const name = nameOrUrl.split("?")[0].split("/").pop();
-  const ext = name.split(".").pop().toLowerCase();
-  if (IMAGE_EXTS.includes(ext)) return "image";
-  if (ext === "pdf") return "pdf";
-  if (["stl","3dm","step","stp","obj","glb","gltf"].includes(ext)) return "3d";
-  return "doc";
-}
-
 function getWeekLabel(week) {
   const d = new Date(2026, 2, 2);
   d.setDate(d.getDate() + (week - 1) * 7);
@@ -335,6 +325,34 @@ function Lightbox({ src, caption, onClose, images, currentIndex, onNavigate }) {
       )}
     </div>
   );
+}
+
+function detectFileType(nameOrUrl) {
+  if (!nameOrUrl) return "doc";
+  const name = nameOrUrl.split("?")[0].split("/").pop();
+  const ext = name.split(".").pop().toLowerCase();
+  if (IMAGE_EXTS.includes(ext)) return "image";
+  if (ext === "pdf") return "pdf";
+  if (["stl","3dm","step","stp","obj","glb","gltf"].includes(ext)) return "3d";
+  return "doc";
+}
+
+function getFileTypeDef(type) {
+  const defs = {
+    image: { icon: "🖼", color: "#5B7F6E", label: "Bild" },
+    pdf:   { icon: "📄", color: "#C75B4A", label: "PDF" },
+    "3d":  { icon: "📐", color: "#7D6B91", label: "3D" },
+    doc:   { icon: "📎", color: "#8B7355", label: "Fil" },
+  };
+  return defs[type] || defs.doc;
+}
+
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2500);
 }
 
 // ─── File Card (single file row) ───
@@ -1402,6 +1420,10 @@ function ImageGallery({ onPreview, folders, setFolders, onOpen3dModel }) {
   );
 }
 
+
+// ─── CORS Proxy config ───
+const CORS_PROXY_URL = ""; // Fyll i din Cloudflare Worker URL här, t.ex. "https://marga-proxy.USERNAME.workers.dev"
+function isProxyConfigured() { return CORS_PROXY_URL.length > 0; }
 
 // ─── Rhino 3D Viewer ───
 function Rhino3DViewer({ pendingUrl, onPendingConsumed }) {
