@@ -67,51 +67,146 @@ const STORAGE_KEY = "boat_restoration_planner_v2";
 const TOTAL_WEEKS = 120;
 
 // ╔══════════════════════════════════════════════════════════╗
-// ─── Supabase konfiguration ───
-const SUPABASE_URL = "https://pkgqqprxbxgvimflpuhj.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBrZ3FxcHJ4YnhndmltZmxwdWhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3OTM4ODAsImV4cCI6MjA5NTM2OTg4MH0.ySgjEbqnTOh25IWxFhoIRhTKPdMHUHxgz7sUEvAQak8";
-const SUPABASE_TABLE = "datat";
-const SUPABASE_ROW_ID = 1;
+// ║  JSONBIN KONFIGURATION — FYLL I DINA UPPGIFTER HÄR     ║
+// ║                                                          ║
+// ║  1. Skapa konto på https://jsonbin.io                    ║
+// ║  2. Kopiera din "X-Master-Key" från Dashboard            ║
+// ║  3. Klicka "Create a Bin" → klistra in: []               ║
+// ║  4. Kopiera Bin-ID:t (ser ut som 65a1b2c3d4e5f6...)     ║
+// ║  5. Fyll i nedan och ladda upp filen till Netlify igen   ║
+// ╚══════════════════════════════════════════════════════════╝
+const JSONBIN_CONFIG = {
+  API_KEY: "$2a$10$M0wAqXZA.0zEcfeMmQeXNu9JZAwGz8Q0Os2E/gmCURLa5USE798Nm",
+  BIN_ID: "699f0d97d0ea881f40d889eb",
+  BASE_URL: "https://api.jsonbin.io/v3",
+};
 
-function isCloudConfigured() { return SUPABASE_URL.length > 0; }
-function isJsonBinConfigured() { return isCloudConfigured(); }
-
-function sbHeaders() {
-  return { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` };
+function isJsonBinConfigured() {
+  return JSONBIN_CONFIG.API_KEY.length > 0 && JSONBIN_CONFIG.BIN_ID.length > 0;
 }
 
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CLOUDFLARE WORKER PROXY — FÖR 3D-VISNING              ║
+// ║                                                          ║
+// ║  Behövs för att ladda .3dm-filer från Google Drive.     ║
+// ║  Se filen "cloudflare-worker.js" för installationsguide ║
+// ║  Fyll i din Worker-URL nedan efter deploy.              ║
+// ╚══════════════════════════════════════════════════════════╝
+const CORS_PROXY_URL = "https://gdrive-proxy.matsbprod.workers.dev";
+
+function isProxyConfigured() {
+  return CORS_PROXY_URL.length > 0;
+}
+
+// File type definitions
+const FILE_TYPES = {
+  image:  { label: "Bild",  extensions: ["jpg","jpeg","png","gif","webp","svg","bmp","tiff"], color: "#5B7F6E", icon: "IMG" },
+  pdf:    { label: "PDF",   extensions: ["pdf"], color: "#C75B4A", icon: "PDF" },
+  cad:    { label: "CAD",   extensions: ["dwg","dxf","step","stp","stl","iges","igs","3dm","skp","f3d","fcstd","obj"], color: "#5A7A8A", icon: "CAD" },
+  doc:    { label: "Dokument", extensions: ["doc","docx","odt","txt","rtf","xls","xlsx","csv"], color: "#D4A76A", icon: "DOK" },
+  other:  { label: "Övrigt", extensions: [], color: "#8A7D6B", icon: "FIL" },
+};
+
+function detectFileType(nameOrUrl) {
+  const str = (nameOrUrl || "").toLowerCase();
+  const ext = str.split(".").pop().split("?")[0].split("#")[0];
+  for (const [key, def] of Object.entries(FILE_TYPES)) {
+    if (def.extensions.includes(ext)) return key;
+  }
+  if (str.includes("drive.google.com")) return "image";
+  return "other";
+}
+
+function getFileTypeDef(type) {
+  return FILE_TYPES[type] || FILE_TYPES.other;
+}
+
+const DEFAULT_TASKS = [
+  { id: 1,  title: "Mallställ och resning",          phase: "Mallställ och resning",          status: "backlog", startWeek: 1,  duration: 2, notes: "", files: [] },
+  { id: 2,  title: "CAD design och konstruktion",    phase: "CAD design och konstruktion",    status: "backlog", startWeek: 1,  duration: 3, notes: "", files: [] },
+  { id: 3,  title: "Rivning och demontering",        phase: "Rivning och demontering",        status: "backlog", startWeek: 3,  duration: 3, notes: "", files: [] },
+  { id: 4,  title: "Skrov och bordläggning",         phase: "Skrov och bordläggning",         status: "backlog", startWeek: 5,  duration: 2, notes: "", files: [] },
+  { id: 5,  title: "Spant och bottenstockar",        phase: "Spant och bottenstockar",        status: "backlog", startWeek: 6,  duration: 4, notes: "", files: [] },
+  { id: 6,  title: "Virke och material",             phase: "Virke och material",             status: "backlog", startWeek: 2,  duration: 2, notes: "", files: [] },
+  { id: 7,  title: "Däck och överbyggnader",         phase: "Däck och överbyggnader",         status: "backlog", startWeek: 9,  duration: 4, notes: "", files: [] },
+  { id: 8,  title: "Ytbehandling",                   phase: "Ytbehandling",                   status: "backlog", startWeek: 12, duration: 4, notes: "", files: [] },
+  { id: 9,  title: "Inredning",                      phase: "Inredning",                      status: "backlog", startWeek: 15, duration: 5, notes: "", files: [] },
+  { id: 10, title: "El och instrument",              phase: "El och instrument",              status: "backlog", startWeek: 16, duration: 3, notes: "", files: [] },
+  { id: 11, title: "Övriga installationer",          phase: "Övriga installationer",          status: "backlog", startWeek: 17, duration: 2, notes: "", files: [] },
+  { id: 12, title: "Motor",                          phase: "Motor",                                  status: "backlog", startWeek: 18, duration: 3, notes: "", files: [] },
+  { id: 13, title: "Roder",                          phase: "Roder",                          status: "backlog", startWeek: 10, duration: 2, notes: "", files: [] },
+  { id: 14, title: "Köl design och tillverkning",    phase: "Köl",                            status: "backlog", startWeek: 8,  duration: 2, notes: "", files: [] },
+  { id: 15, title: "Mast och bom",                   phase: "Mast och bom",                   status: "backlog", startWeek: 22, duration: 2, notes: "", files: [] },
+  { id: 16, title: "Segel och rigg",                 phase: "Segel och rigg",                 status: "backlog", startWeek: 24, duration: 2, notes: "", files: [] },
+];
+
+// ─── Helpers ───
+function getWeekLabel(week) {
+  const d = new Date(2026, 2, 2);
+  d.setDate(d.getDate() + (week - 1) * 7);
+  return d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+}
+
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+function loadTasksLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed.map(t => ({ ...t, files: (t.files || []).map(f => ({ ...f, type: f.type || detectFileType(f.name || f.url) })) }));
+    }
+  } catch (e) { console.warn("Kunde inte ladda sparad data:", e); }
+  return null;
+}
+
+function saveTasksLocal(tasks) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+  catch (e) { console.warn("Kunde inte spara lokalt:", e); }
+}
+
+// ─── JSONBin Cloud Sync (combined: tasks + gallery) ───
 function normalizeTasks(arr) {
   if (!Array.isArray(arr)) return null;
   return arr.map(t => ({ ...t, files: (t.files || []).map(f => ({ ...f, type: f.type || detectFileType(f.name || f.url) })) }));
 }
 
 async function loadFromCloud() {
+  if (!isJsonBinConfigured()) return null;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?id=eq.${SUPABASE_ROW_ID}&select=content`, {
-      headers: sbHeaders()
+    const res = await fetch(`${JSONBIN_CONFIG.BASE_URL}/b/${JSONBIN_CONFIG.BIN_ID}/latest`, {
+      headers: { "X-Master-Key": JSONBIN_CONFIG.API_KEY }
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const rows = await res.json();
-    if (!rows || rows.length === 0) return null;
-    const record = JSON.parse(rows[0].content);
-    if (Array.isArray(record)) return { tasks: normalizeTasks(record), gallery: null };
-    if (record && record.tasks) return { tasks: normalizeTasks(record.tasks), gallery: record.gallery || null };
+    const data = await res.json();
+    const record = data.record;
+    // Support both old format (plain array) and new format ({ tasks, gallery })
+    if (Array.isArray(record)) {
+      return { tasks: normalizeTasks(record), gallery: null };
+    }
+    if (record && record.tasks) {
+      return { tasks: normalizeTasks(record.tasks), gallery: record.gallery || null };
+    }
     return null;
-  } catch (e) { console.warn("Kunde inte hämta från Supabase:", e); return null; }
+  } catch (e) { console.warn("Kunde inte hämta från JSONBin:", e); return null; }
 }
 
 async function saveToCloud(tasks, gallery) {
+  if (!isJsonBinConfigured()) return false;
   try {
-    const content = JSON.stringify({ tasks, gallery });
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`, {
-      method: "POST",
-      headers: { ...sbHeaders(), "Prefer": "resolution=merge-duplicates" },
-      body: JSON.stringify({ id: SUPABASE_ROW_ID, content }),
+    const res = await fetch(`${JSONBIN_CONFIG.BASE_URL}/b/${JSONBIN_CONFIG.BIN_ID}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Master-Key": JSONBIN_CONFIG.API_KEY },
+      body: JSON.stringify({ tasks, gallery }),
     });
-    return res.ok || res.status === 201;
-  } catch (e) { console.warn("Kunde inte spara till Supabase:", e); return false; }
+    return res.ok;
+  } catch (e) { console.warn("Kunde inte spara till JSONBin:", e); return false; }
 }
-
 
 // Debounce helper for combined save
 function createDebouncedSaver(delayMs = 1500) {
@@ -121,7 +216,7 @@ function createDebouncedSaver(delayMs = 1500) {
     onStatus("saving");
     saveTasksLocal(tasks);
     saveGalleryLocal(gallery);
-    if (!isCloudConfigured()) { onStatus("offline"); return; }
+    if (!isJsonBinConfigured()) { onStatus("offline"); return; }
     timer = setTimeout(async () => {
       const ok = await saveToCloud(tasks, gallery);
       onStatus(ok ? "saved" : "error");
