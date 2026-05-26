@@ -144,7 +144,7 @@ function SyncIndicator({ status }) {
     <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: cfg.color, fontWeight: 600 }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: cfg.color, display: "inline-block", animation: status === "saving" || status === "loading" ? "pulse 1s infinite" : "none" }} />
       {cfg.text}
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+      <style>{"@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }"}</style>
     </div>
   );
 }
@@ -727,10 +727,6 @@ function GanttChart({ tasks, phases, onEdit, filterPhase, onUpdateTask }) {
             })}
           </div>
         </div>
-      </div>
-      </div>
-      </div>
-      </div>
     </div>
   );
 }
@@ -745,7 +741,7 @@ function Stats({ tasks }) {
 
   const statItems = [
     { label: "Totalt uppgifter", value: total, color: "#3A2E22" },
-    { label: "Avklarade", value: `${done} (${pct}%)`, color: "#5B7F6E" },
+    { label: "Avklarade", value: done + " (" + pct + "%)", color: "#5B7F6E" },
     { label: "Pågående", value: inProgress, color: "#D4A76A" },
     { label: "Bifogade filer", value: totalFiles, color: "#5A7A8A" },
   ];
@@ -2387,7 +2383,7 @@ function SyncIndicator({ status }) {
     <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: cfg.color, fontWeight: 600 }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: cfg.color, display: "inline-block", animation: status === "saving" || status === "loading" ? "pulse 1s infinite" : "none" }} />
       {cfg.text}
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+      <style>{"@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }"}</style>
     </div>
   );
 }
@@ -2970,8 +2966,6 @@ function GanttChart({ tasks, phases, onEdit, filterPhase, onUpdateTask }) {
             })}
           </div>
         </div>
-      </div>
-      </div>
     </div>
   );
 }
@@ -2986,7 +2980,7 @@ function Stats({ tasks }) {
 
   const statItems = [
     { label: "Totalt uppgifter", value: total, color: "#3A2E22" },
-    { label: "Avklarade", value: `${done} (${pct}%)`, color: "#5B7F6E" },
+    { label: "Avklarade", value: done + " (" + pct + "%)", color: "#5B7F6E" },
     { label: "Pågående", value: inProgress, color: "#D4A76A" },
     { label: "Bifogade filer", value: totalFiles, color: "#5A7A8A" },
   ];
@@ -4621,7 +4615,7 @@ function SyncIndicator({ status }) {
     <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: cfg.color, fontWeight: 600 }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: cfg.color, display: "inline-block", animation: status === "saving" || status === "loading" ? "pulse 1s infinite" : "none" }} />
       {cfg.text}
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+      <style>{"@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }"}</style>
     </div>
   );
 }
@@ -5204,8 +5198,6 @@ function GanttChart({ tasks, phases, onEdit, filterPhase, onUpdateTask }) {
             })}
           </div>
         </div>
-      </div>
-      </div>
     </div>
   );
 }
@@ -5220,7 +5212,7 @@ function Stats({ tasks }) {
 
   const statItems = [
     { label: "Totalt uppgifter", value: total, color: "#3A2E22" },
-    { label: "Avklarade", value: `${done} (${pct}%)`, color: "#5B7F6E" },
+    { label: "Avklarade", value: done + " (" + pct + "%)", color: "#5B7F6E" },
     { label: "Pågående", value: inProgress, color: "#D4A76A" },
     { label: "Bifogade filer", value: totalFiles, color: "#5A7A8A" },
   ];
@@ -6862,7 +6854,7 @@ function SyncIndicator({ status }) {
     <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: cfg.color, fontWeight: 600 }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: cfg.color, display: "inline-block", animation: status === "saving" || status === "loading" ? "pulse 1s infinite" : "none" }} />
       {cfg.text}
-      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+      <style>{"@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }"}</style>
     </div>
   );
 }
@@ -7445,8 +7437,6 @@ function GanttChart({ tasks, phases, onEdit, filterPhase, onUpdateTask }) {
             })}
           </div>
         </div>
-      </div>
-      </div>
     </div>
   );
 }
@@ -7461,7 +7451,7 @@ function Stats({ tasks }) {
 
   const statItems = [
     { label: "Totalt uppgifter", value: total, color: "#3A2E22" },
-    { label: "Avklarade", value: `${done} (${pct}%)`, color: "#5B7F6E" },
+    { label: "Avklarade", value: done + " (" + pct + "%)", color: "#5B7F6E" },
     { label: "Pågående", value: inProgress, color: "#D4A76A" },
     { label: "Bifogade filer", value: totalFiles, color: "#5A7A8A" },
   ];
