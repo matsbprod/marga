@@ -189,6 +189,7 @@ function getWeekLabel(week) {
 }
 
 const DEFAULT_FOLDERS = [];
+const DEFAULT_TASKS = [];
 
 function loadTasksLocal() {
   try {
@@ -360,11 +361,12 @@ function FileCard({ file, index, onRemove, onPreview }) {
   const typeDef = getFileTypeDef(file.type || detectFileType(file.name || file.url));
   const isImage = (file.type || detectFileType(file.name || file.url)) === "image";
   const driveId = extractGdriveId(file.url);
+  const showThumb = isImage && (driveId || isGithubUrl(file.url));
 
   return (
     <div className="file-card">
       {/* Icon or thumbnail */}
-      {isImage && driveId ? (
+      {showThumb ? (
         <img
           src={fileThumbUrl(file.url)}
           alt={file.name}
@@ -373,7 +375,7 @@ function FileCard({ file, index, onRemove, onPreview }) {
           onError={e => { e.target.style.display = "none"; e.target.nextSibling && (e.target.nextSibling.style.display = "flex"); }}
         />
       ) : null}
-      <div className="file-icon" style={{ background: typeDef.color, display: (isImage && driveId) ? "none" : "flex" }}>
+      <div className="file-icon" style={{ background: typeDef.color, display: showThumb ? "none" : "flex" }}>
         {typeDef.icon}
       </div>
 
@@ -405,24 +407,23 @@ function FileCard({ file, index, onRemove, onPreview }) {
 }
 
 // ─── File Attachments Section ───
-function FileAttachments({ files, onChange, onPreview }) {
-  const [newUrl, setNewUrl] = useState("");
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState("auto");
-
-  const addFile = () => {
-    if (!newUrl.trim()) return;
-    const autoType = detectFileType(newName.trim() || newUrl.trim());
-    const type = newType === "auto" ? autoType : newType;
-    const name = newName.trim() || `Fil ${files.length + 1}`;
-    onChange([...files, { url: newUrl.trim(), name, type, addedAt: new Date().toISOString() }]);
-    setNewUrl("");
-    setNewName("");
-    setNewType("auto");
-    showToast("Fil tillagd ✓");
-  };
-
+function FileAttachments({ files, onChange, onPreview, taskTitle }) {
   const removeFile = (idx) => onChange(files.filter((_, i) => i !== idx));
+
+  // Slugify task title for folder path: "Mallställ och resning" → "mallstall-och-resning"
+  function slugify(str) {
+    return (str || "okant")
+      .toLowerCase()
+      .replace(/å/g,"a").replace(/ä/g,"a").replace(/ö/g,"o")
+      .replace(/[^a-z0-9]+/g,"-")
+      .replace(/^-+|-+$/g,"")
+      .slice(0, 40) || "okant";
+  }
+  const targetPath = "BILDER/uppgifter/" + slugify(taskTitle);
+
+  function handleUploaded(fileObj) {
+    onChange([...files, fileObj]);
+  }
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -437,7 +438,6 @@ function FileAttachments({ files, onChange, onPreview }) {
           {files.map((f, i) => (
             <FileCard key={i} file={f} index={i} onRemove={removeFile} onPreview={onPreview} />
           ))}
-          {/* Download all */}
           {files.length > 1 && (
             <div style={{ textAlign: "right", marginTop: 2 }}>
               <button
@@ -453,46 +453,8 @@ function FileAttachments({ files, onChange, onPreview }) {
         </div>
       )}
 
-      {/* Add new file */}
-      <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: 8, padding: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "#6B5D4E", marginBottom: 8 }}>Lägg till fil från Google Drive</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <input
-            placeholder="Klistra in Google Drive-länk…"
-            value={newUrl}
-            onChange={e => setNewUrl(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && addFile()}
-            style={{ flex: "2 1 180px", padding: "7px 10px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" }}
-          />
-          <input
-            placeholder="Filnamn (t.ex. skrov-foto.jpg)"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && addFile()}
-            style={{ flex: "1 1 140px", padding: "7px 10px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" }}
-          />
-          <select
-            value={newType}
-            onChange={e => setNewType(e.target.value)}
-            style={{ flex: "0 0 90px", padding: "7px 6px", borderRadius: 7, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit", cursor: "pointer" }}
-          >
-            <option value="auto">Auto</option>
-            <option value="image">Bild</option>
-            <option value="pdf">PDF</option>
-            <option value="cad">CAD</option>
-            <option value="doc">Dokument</option>
-            <option value="other">Övrigt</option>
-          </select>
-          <button
-            onClick={addFile}
-            disabled={!newUrl.trim()}
-            style={{ flex: "0 0 auto", padding: "7px 14px", border: "none", borderRadius: 7, background: newUrl.trim() ? "#5B7F6E" : "#E5DDD0", color: newUrl.trim() ? "#fff" : "#A89878", fontWeight: 700, fontSize: 12, cursor: newUrl.trim() ? "pointer" : "default", whiteSpace: "nowrap" }}
-          >+ Lägg till</button>
-        </div>
-        <div style={{ fontSize: 10, color: "#A89878", marginTop: 6, lineHeight: 1.4 }}>
-          Tips: Högerklicka på filen i Google Drive → "Hämta länk" → klistra in. Se till att delning är "Alla med länken". Skriv filnamn med ändelse (t.ex. <b>ritning.dwg</b>) så identifieras filtypen automatiskt.
-        </div>
-      </div>
+      {/* GitHub upload */}
+      <GithubUploader targetPath={targetPath} onUploaded={handleUploaded} compact />
     </div>
   );
 }
@@ -608,7 +570,7 @@ function TaskModal({ task, onSave, onDelete, onClose, phases, onPreview }) {
         <label style={labelStyle}>Anteckningar</label>
         <textarea rows={3} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
 
-        <FileAttachments files={form.files} onChange={files => setForm({ ...form, files })} onPreview={onPreview} />
+        <FileAttachments files={form.files} onChange={files => setForm({ ...form, files })} onPreview={onPreview} taskTitle={form.title} />
 
         <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
           {!isNew && <button onClick={() => { onDelete(form.id); onClose(); }} style={{ ...btnStyle, background: "#C75B4A", color: "#fff" }}>Ta bort</button>}
@@ -942,7 +904,7 @@ const UPLOAD_ACCOUNTS = [
 
 const UPLOAD_SESSION_KEY = "marga_upload_account";
 
-function GithubUploader({ targetPath, onDone }) {
+function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
   const [loggedIn, setLoggedIn] = useState(() => {
     const saved = sessionStorage.getItem(UPLOAD_SESSION_KEY);
     return saved ? JSON.parse(saved) : null;
@@ -1012,6 +974,12 @@ function GithubUploader({ targetPath, onDone }) {
         setStatus("done");
         setMsg(`✓ ${f.name} uppladdad!`);
         setFile(null);
+        // Build the raw GitHub URL for the uploaded file
+        const rawUrl = `${GITHUB_RAW}/${path}`;
+        if (onUploaded) {
+          const fileType = detectFileType(f.name);
+          onUploaded({ url: rawUrl, name: f.name, type: fileType, addedAt: new Date().toISOString() });
+        }
         if (onDone) setTimeout(onDone, 800);
       };
       reader.readAsDataURL(f);
@@ -1027,8 +995,10 @@ function GithubUploader({ targetPath, onDone }) {
 
   // Login form
   if (!loggedIn) return (
-    <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: 10, padding: 16, marginTop: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>🔒 Logga in för att ladda upp</div>
+    <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: compact ? 8 : 10, padding: compact ? 12 : 16, marginTop: compact ? 0 : 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+        {compact ? "↑ Ladda upp till GitHub" : "🔒 Logga in för att ladda upp"}
+      </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setLoginError(""); }}
           style={{ ...inputStyle, cursor: "pointer" }}>
@@ -1046,9 +1016,9 @@ function GithubUploader({ targetPath, onDone }) {
 
   // Upload form (logged in)
   return (
-    <div style={{ marginTop: 16 }}>
+    <div style={{ marginTop: compact ? 0 : 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#5B7F6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>↑ Ladda upp — inloggad som {loggedIn.name}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#5B7F6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>↑ Ladda upp — {loggedIn.name}</div>
         <button onClick={logout} style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer" }}>Logga ut</button>
       </div>
 
@@ -2405,8 +2375,8 @@ function App() {
         )}
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 11, color: "#A89878" }}>
           {isJsonBinConfigured()
-            ? "Data synkas automatiskt till molnet (JSONBin) • Alla med länken ser samma data"
-            : "⚠ Molnsynk ej konfigurerad — data sparas bara lokalt. Fyll i JSONBIN_CONFIG i koden."}
+            ? "Data synkas automatiskt till molnet (Supabase) • Alla med länken ser samma data"
+            : "⚠ Molnsynk ej konfigurerad — data sparas bara lokalt."}
         </div>
       </div>
 
