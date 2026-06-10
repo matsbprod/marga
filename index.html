@@ -365,7 +365,6 @@ function FileCard({ file, index, onRemove, onPreview }) {
 
   return (
     <div className="file-card">
-      {/* Icon or thumbnail */}
       {showThumb ? (
         <img
           src={fileThumbUrl(file.url)}
@@ -420,10 +419,6 @@ function FileAttachments({ files, onChange, onPreview, taskTitle }) {
   }
   const targetPath = "BILDER/uppgifter/" + slugify(taskTitle);
 
-  function handleUploaded(fileObj) {
-    onChange([...files, fileObj]);
-  }
-
   return (
     <div style={{ marginTop: 14 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
@@ -434,34 +429,33 @@ function FileAttachments({ files, onChange, onPreview, taskTitle }) {
       {files.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           {files.map((f, i) => (
-            <FileCard key={i} file={f} index={i} onRemove={removeFile} onPreview={onPreview} />
+            <FileCard key={i} file={f} index={i} onRemove={idx => onChange(files.filter((_, j) => j !== idx))} onPreview={onPreview} />
           ))}
           {files.length > 1 && (
             <div style={{ textAlign: "right", marginTop: 2 }}>
               <button
                 onClick={() => { files.forEach((f, i) => { setTimeout(() => { window.open(fileDownloadUrl(f.url), "_blank"); }, i * 500); }); showToast("Laddar ner alla filer…"); }}
-                style={{ fontSize: 11, fontWeight: 700, color: "#5A7A8A", background: "none", border: "1.5px solid #5A7A8A", borderRadius: 6, padding: "5px 12px", cursor: "pointer", transition: "background 0.15s" }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(90,122,138,0.08)"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-              >
-                ↓ Ladda ner alla ({files.length} filer)
-              </button>
+                style={{ fontSize: 11, fontWeight: 700, color: "#5A7A8A", background: "none", border: "1.5px solid #5A7A8A", borderRadius: 6, padding: "5px 12px", cursor: "pointer" }}
+              >↓ Ladda ner alla ({files.length} filer)</button>
             </div>
           )}
         </div>
       )}
 
-      <GithubUploader targetPath={targetPath} onUploaded={handleUploaded} compact />
+      <GithubUploader targetPath={targetPath} onUploaded={fileObj => onChange([...files, fileObj])} compact />
     </div>
   );
 }
 
 // ─── Kanban Card ───
-function KanbanCard({ task, phases, onEdit, onDragStart, onDragOver, onDrop }) {
+function KanbanCard({ task, phases, onEdit, onDragStart, onDragOver, onDrop, onPreview }) {
   const phase = phases.find(p => p.id === task.phase);
   const files = task.files || [];
+  const imageFiles = files.filter(f => (f.type || detectFileType(f.name || f.url)) === "image");
+  const nonImageFiles = files.filter(f => (f.type || detectFileType(f.name || f.url)) !== "image");
   const filesByType = {};
-  files.forEach(f => { const t = f.type || "other"; filesByType[t] = (filesByType[t] || 0) + 1; });
+  nonImageFiles.forEach(f => { const t = f.type || "other"; filesByType[t] = (filesByType[t] || 0) + 1; });
+  const allImageObjs = imageFiles.map(f => ({ src: fileViewUrl(f.url), caption: f.name }));
 
   return (
     <div
@@ -478,7 +472,6 @@ function KanbanCard({ task, phases, onEdit, onDragStart, onDragOver, onDrop }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", color: phase?.color, textTransform: "uppercase" }}>{phase?.label}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {/* File type badges */}
           {Object.entries(filesByType).map(([type, count]) => {
             const def = getFileTypeDef(type);
             return (
@@ -494,12 +487,34 @@ function KanbanCard({ task, phases, onEdit, onDragStart, onDragOver, onDrop }) {
           {task.notes.length > 60 ? task.notes.slice(0, 60) + "…" : task.notes}
         </div>
       )}
+      {/* Image thumbnails */}
+      {imageFiles.length > 0 && (
+        <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
+          {imageFiles.slice(0, 4).map((f, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              <img
+                src={fileThumbUrl(f.url)}
+                alt={f.name}
+                onClick={e => { e.stopPropagation(); if (onPreview) onPreview(fileViewUrl(f.url), f.name, allImageObjs, i); }}
+                style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 5, border: "1.5px solid #E5DDD0", cursor: "zoom-in", display: "block" }}
+                onError={e => { e.target.style.display = "none"; }}
+              />
+              {i === 3 && imageFiles.length > 4 && (
+                <div onClick={e => { e.stopPropagation(); if (onPreview) onPreview(fileViewUrl(imageFiles[3].url), imageFiles[3].name, allImageObjs, 3); }}
+                  style={{ position: "absolute", inset: 0, background: "rgba(40,30,20,0.55)", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-in" }}>
+                  <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>+{imageFiles.length - 3}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Kanban Column ───
-function KanbanColumn({ status, tasks, phases, onEdit, onDrop, onDragStart, dragOverStatus, setDragOverStatus, onReorder }) {
+function KanbanColumn({ status, tasks, phases, onEdit, onDrop, onDragStart, dragOverStatus, setDragOverStatus, onReorder, onPreview }) {
   const dragOverCard = useRef(null);
   return (
     <div
@@ -514,7 +529,7 @@ function KanbanColumn({ status, tasks, phases, onEdit, onDrop, onDragStart, drag
         <span style={{ marginLeft: "auto", fontSize: 11, background: "#E5DDD0", borderRadius: 10, padding: "1px 8px", color: "#6B5D4E", fontWeight: 600 }}>{tasks.length}</span>
       </div>
       <div style={{ minHeight: 40 }}>
-        {tasks.map(t => <KanbanCard key={t.id} task={t} phases={phases} onEdit={onEdit} onDragStart={onDragStart}
+        {tasks.map(t => <KanbanCard key={t.id} task={t} phases={phases} onEdit={onEdit} onDragStart={onDragStart} onPreview={onPreview}
         onDragOver={cardId => { dragOverCard.current = cardId; }}
         onDrop={e => { const draggedId = parseInt(e.dataTransfer.getData("taskId")); if (onReorder && dragOverCard.current && draggedId !== dragOverCard.current) { onReorder(draggedId, dragOverCard.current, status.id); } dragOverCard.current = null; }}
       />)}
@@ -973,8 +988,7 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
         setFile(null);
         const rawUrl = `${GITHUB_RAW}/${path}`;
         if (onUploaded) {
-          const fileType = detectFileType(f.name);
-          onUploaded({ url: rawUrl, name: f.name, type: fileType, addedAt: new Date().toISOString() });
+          onUploaded({ url: rawUrl, name: f.name, type: detectFileType(f.name), addedAt: new Date().toISOString() });
         }
         if (onDone) setTimeout(onDone, 800);
       };
@@ -2347,7 +2361,7 @@ function App() {
         {(view !== "gallery" && view !== "viewer3d") && <Stats tasks={tasks} />}
         {view === "board" ? (
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 16 }}>
-            {STATUSES.map(s => <KanbanColumn key={s.id} status={s} tasks={filteredTasks.filter(t => t.status === s.id)} phases={PHASES} onEdit={setEditingTask} onDrop={handleDrop} onDragStart={setDraggingId} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} onReorder={handleReorder} />)}
+            {STATUSES.map(s => <KanbanColumn key={s.id} status={s} tasks={filteredTasks.filter(t => t.status === s.id)} phases={PHASES} onEdit={setEditingTask} onDrop={handleDrop} onDragStart={setDraggingId} dragOverStatus={dragOverStatus} setDragOverStatus={setDragOverStatus} onReorder={handleReorder} onPreview={(src, caption, images, idx) => openLightbox(src, caption, images, idx)} />)}
           </div>
         ) : view === "gantt" ? (
           <GanttChart tasks={tasks} phases={PHASES} onEdit={setEditingTask} filterPhase={filterPhase} onUpdateTask={handleUpdateTask} />
