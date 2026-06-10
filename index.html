@@ -410,7 +410,6 @@ function FileCard({ file, index, onRemove, onPreview }) {
 function FileAttachments({ files, onChange, onPreview, taskTitle }) {
   const removeFile = (idx) => onChange(files.filter((_, i) => i !== idx));
 
-  // Slugify task title for folder path: "Mallställ och resning" → "mallstall-och-resning"
   function slugify(str) {
     return (str || "okant")
       .toLowerCase()
@@ -432,7 +431,6 @@ function FileAttachments({ files, onChange, onPreview, taskTitle }) {
         Bifogade filer ({files.length})
       </div>
 
-      {/* File list */}
       {files.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           {files.map((f, i) => (
@@ -453,7 +451,6 @@ function FileAttachments({ files, onChange, onPreview, taskTitle }) {
         </div>
       )}
 
-      {/* GitHub upload */}
       <GithubUploader targetPath={targetPath} onUploaded={handleUploaded} compact />
     </div>
   );
@@ -896,7 +893,7 @@ function decodeToken(enc) { return xorObfuscate(atob(enc), "marga1918"); }
 // ║  och klistra in resultatet som TOKEN_ENC nedan          ║
 // ╚══════════════════════════════════════════════════════════╝
 const UPLOAD_ACCOUNTS = [
-  { id: "konto1", name: "Mats",    password: "marga1",  tokenEnc: "" },
+  { id: "konto1", name: "Mats",    password: "marga1",  tokenEnc: "CggGDxRTZkFZGT5DViJzc3N7OCBCPhADUwFTL1IiPi5zZkMMGjY/FTJZDmlvBRcHAlAEa218Wy5AAVcEewNoHQY8NARjCAhsBlk8CFB+aH5rWiQkJgZJaENcGDsz" },
   { id: "konto2", name: "Konto 2", password: "marga2",  tokenEnc: "" },
   { id: "konto3", name: "Konto 3", password: "marga3",  tokenEnc: "" },
   { id: "konto4", name: "Konto 4", password: "marga4",  tokenEnc: "" },
@@ -974,7 +971,6 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
         setStatus("done");
         setMsg(`✓ ${f.name} uppladdad!`);
         setFile(null);
-        // Build the raw GitHub URL for the uploaded file
         const rawUrl = `${GITHUB_RAW}/${path}`;
         if (onUploaded) {
           const fileType = detectFileType(f.name);
