@@ -155,7 +155,6 @@ const GITHUB_REPO = "matsbprod/marga";
 const GITHUB_RAW = "https://raw.githubusercontent.com/matsbprod/marga/main";
 const GITHUB_API = "https://api.github.com/repos/matsbprod/marga/contents";
 
-// Site auth
 const SITE_PASSWORD = "marga2025";
 const SITE_AUTH_KEY = "marga_site_auth";
 
@@ -165,8 +164,14 @@ function getGithubReadToken() { return localStorage.getItem(GITHUB_TOKEN_KEY) ||
 function setGithubReadToken(t) { if (t) localStorage.setItem(GITHUB_TOKEN_KEY, t); else localStorage.removeItem(GITHUB_TOKEN_KEY); }
 
 function ghApiHeaders() {
-  // Prefer upload account token if logged in
-  const saved = sessionStorage.getItem(UPLOAD_SESSION_KEY);
+  // Auto-login: if site is authenticated, always use account 0's token
+  if (localStorage.getItem(SITE_AUTH_KEY) === "1") {
+    const account = UPLOAD_ACCOUNTS[0];
+    if (account?.tokenEnc) {
+      return { Accept: "application/vnd.github.v3+json", Authorization: `token ${decodeToken(account.tokenEnc)}` };
+    }
+  }
+  const saved = localStorage.getItem(UPLOAD_SESSION_KEY);
   if (saved) {
     try {
       const session = JSON.parse(saved);
@@ -892,26 +897,28 @@ const UPLOAD_ACCOUNTS = [
   { id: "konto4", name: "Konto 4", password: "marga4",  tokenEnc: "" },
 ];
 
-const UPLOAD_SESSION_KEY = "marga_upload_account";
+const UPLOAD_SESSION_KEY = "marga_upload_account_ls";
 
 function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
-  const [loggedIn, setLoggedIn] = useState(() => {
+  // Auto-login: if site is authenticated, always use account 0 — no manual login needed
+  function getAutoSession() {
     if (localStorage.getItem(SITE_AUTH_KEY) === "1") {
       const account = UPLOAD_ACCOUNTS[0];
-      if (account?.tokenEnc) {
-        const session = { id: account.id, name: account.name };
-        sessionStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify(session));
-        return session;
-      }
+      if (account?.tokenEnc) return { id: account.id, name: account.name };
     }
-    const saved = sessionStorage.getItem(UPLOAD_SESSION_KEY);
+    const saved = localStorage.getItem(UPLOAD_SESSION_KEY);
     return saved ? JSON.parse(saved) : null;
-  });
+  }
+
+  const [loggedIn, setLoggedIn] = useState(getAutoSession);
   const [selectedId, setSelectedId] = useState(UPLOAD_ACCOUNTS[0].id);
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
-  const [files, setFiles] = useState([]);   // queue: [{file, status, msg}]
+  const [queue, setQueue] = useState([]);  // [{file, status, msg}]
   const [dragging, setDragging] = useState(false);
+
+  // Re-check auto-login on every render in case site auth changed
+  const effectiveLogin = loggedIn || getAutoSession();
 
   const inputStyle = { padding: "7px 10px", borderRadius: 6, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
 
@@ -919,34 +926,34 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
     const account = UPLOAD_ACCOUNTS.find(a => a.id === selectedId);
     if (!account) return;
     if (account.password !== password) { setLoginError("Fel lösenord"); return; }
-    if (!account.tokenEnc) { setLoginError("Token ej konfigurerat för detta konto — kontakta admin"); return; }
+    if (!account.tokenEnc) { setLoginError("Token ej konfigurerat"); return; }
     const session = { id: account.id, name: account.name };
-    sessionStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify(session));
+    localStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify(session));
     setLoggedIn(session);
     setPassword(""); setLoginError("");
   }
 
   function logout() {
-    sessionStorage.removeItem(UPLOAD_SESSION_KEY);
-    setLoggedIn(null); setFiles([]);
+    localStorage.removeItem(UPLOAD_SESSION_KEY);
+    setLoggedIn(null); setQueue([]);
   }
 
   function getToken() {
-    const account = UPLOAD_ACCOUNTS.find(a => a.id === loggedIn?.id);
+    const session = effectiveLogin;
+    const account = UPLOAD_ACCOUNTS.find(a => a.id === session?.id);
     return account ? decodeToken(account.tokenEnc) : null;
   }
 
   function addFiles(newFiles) {
-    const entries = Array.from(newFiles).map(f => ({ file: f, status: "idle", msg: "" }));
-    setFiles(prev => [...prev, ...entries]);
+    setQueue(prev => [...prev, ...Array.from(newFiles).map(f => ({ file: f, status: "idle", msg: "" }))]);
   }
 
-  async function uploadOne(idx) {
+  async function uploadOne(idx, currentQueue) {
     const token = getToken();
     if (!token) return;
-    const entry = files[idx];
+    const entry = currentQueue[idx];
     const f = entry.file;
-    setFiles(prev => prev.map((e,i) => i===idx ? {...e, status:"uploading", msg:""} : e));
+    setQueue(prev => prev.map((e,i) => i===idx ? {...e, status:"uploading"} : e));
     try {
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader();
@@ -962,26 +969,25 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
       const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
         method: "PUT",
         headers: { Authorization: `token ${token}`, "Content-Type": "application/json", Accept: "application/vnd.github.v3+json" },
-        body: JSON.stringify({ message: `${loggedIn.name}: laddar upp ${f.name}`, content: base64, ...(sha ? { sha } : {}) }),
+        body: JSON.stringify({ message: `${effectiveLogin.name}: laddar upp ${f.name}`, content: base64, ...(sha ? { sha } : {}) }),
       });
       if (!res.ok) {
         const err = await res.json();
-        if (res.status === 401) { logout(); return; }
         throw new Error(err.message || `HTTP ${res.status}`);
       }
-      setFiles(prev => prev.map((e,i) => i===idx ? {...e, status:"done", msg:`✓ ${f.name}`} : e));
+      setQueue(prev => prev.map((e,i) => i===idx ? {...e, status:"done"} : e));
       const rawUrl = `${GITHUB_RAW}/${path}`;
       if (onUploaded) onUploaded({ url: rawUrl, name: f.name, type: detectFileType(f.name), addedAt: new Date().toISOString() });
     } catch(e) {
-      setFiles(prev => prev.map((e2,i) => i===idx ? {...e2, status:"error", msg:`✗ ${e.message}`} : e2));
+      setQueue(prev => prev.map((e2,i) => i===idx ? {...e2, status:"error", msg:e.message} : e2));
     }
   }
 
   async function uploadAll() {
-    for (let i = 0; i < files.length; i++) {
-      if (files[i].status === "idle") await uploadOne(i);
+    const snap = queue;
+    for (let i = 0; i < snap.length; i++) {
+      if (snap[i].status === "idle") await uploadOne(i, snap);
     }
-    if (onDone) setTimeout(onDone, 400);
   }
 
   function onDrop(e) {
@@ -989,16 +995,13 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
     if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
   }
 
-  const pendingCount = files.filter(e => e.status === "idle").length;
-  const doneCount = files.filter(e => e.status === "done").length;
   const inputId = `file-input-${targetPath.replace(/\//g,"-")}`;
+  const pendingCount = queue.filter(e => e.status === "idle").length;
+  const doneCount = queue.filter(e => e.status === "done").length;
 
-  // Login form
-  if (!loggedIn) return (
+  if (!effectiveLogin) return (
     <div style={{ background: "#FAF6EF", border: "1.5px dashed #DDD5C8", borderRadius: compact ? 8 : 10, padding: compact ? 12 : 16, marginTop: compact ? 0 : 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-        {compact ? "↑ Ladda upp till GitHub" : "🔒 Logga in för att ladda upp"}
-      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7D6B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>↑ Ladda upp till GitHub</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setLoginError(""); }} style={{ ...inputStyle, cursor: "pointer" }}>
           {UPLOAD_ACCOUNTS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -1013,53 +1016,35 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
     </div>
   );
 
-  // Upload form
   return (
     <div style={{ marginTop: compact ? 0 : 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#5B7F6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>↑ Ladda upp — {loggedIn.name}</div>
-        <button onClick={logout} style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer" }}>Logga ut</button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#5B7F6E", textTransform: "uppercase", letterSpacing: "0.06em" }}>↑ Ladda upp — {effectiveLogin.name}</div>
+        {loggedIn && !localStorage.getItem(SITE_AUTH_KEY) && <button onClick={logout} style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer" }}>Logga ut</button>}
       </div>
-
-      {/* Drop zone */}
-      <div
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
+      <div onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
         onClick={() => document.getElementById(inputId)?.click()}
-        style={{ border: `2px dashed ${dragging ? "#5B7F6E" : "#C4B89E"}`, borderRadius: 10, padding: "16px", textAlign: "center", cursor: "pointer", background: dragging ? "rgba(91,127,110,0.06)" : "#FAF6EF", transition: "all 0.15s" }}>
+        style={{ border: `2px dashed ${dragging ? "#5B7F6E" : "#C4B89E"}`, borderRadius: 8, padding: "14px", textAlign: "center", cursor: "pointer", background: dragging ? "rgba(91,127,110,0.06)" : "#FAF6EF", transition: "all 0.15s" }}>
         <input id={inputId} type="file" multiple style={{ display: "none" }}
           onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value=""; }} />
-        <div style={{ fontSize: 20, marginBottom: 2 }}>↑</div>
-        <div style={{ fontSize: 12, color: "#8A7D6B" }}>Dra hit eller klicka — flera filer i taget OK</div>
+        <div style={{ fontSize: 18, marginBottom: 2 }}>↑</div>
+        <div style={{ fontSize: 12, color: "#8A7D6B" }}>Dra hit eller klicka — flera filer OK</div>
       </div>
-
-      {/* File queue */}
-      {files.length > 0 && (
-        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-          {files.map((e, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 6px", background: e.status==="done" ? "rgba(91,127,110,0.07)" : e.status==="error" ? "rgba(199,91,74,0.07)" : "#FAF6EF", borderRadius: 6 }}>
+      {queue.length > 0 && (
+        <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+          {queue.map((e, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "3px 6px", background: e.status==="done" ? "rgba(91,127,110,0.07)" : e.status==="error" ? "rgba(199,91,74,0.07)" : "#FAF6EF", borderRadius: 5 }}>
               <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#3A2E22" }}>{e.file.name}</span>
-              <span style={{ fontSize: 10, color: e.status==="done" ? "#5B7F6E" : e.status==="error" ? "#C75B4A" : e.status==="uploading" ? "#C9A84C" : "#A89878", flexShrink: 0 }}>
-                {e.status==="uploading" ? "laddar upp…" : e.status==="done" ? "✓" : e.status==="error" ? "✗" : `${(e.file.size/1024).toFixed(0)} KB`}
+              <span style={{ fontSize: 10, flexShrink: 0, color: e.status==="done" ? "#5B7F6E" : e.status==="error" ? "#C75B4A" : e.status==="uploading" ? "#C9A84C" : "#A89878" }}>
+                {e.status==="uploading" ? "laddar…" : e.status==="done" ? "✓" : e.status==="error" ? `✗ ${e.msg}` : `${(e.file.size/1024).toFixed(0)} KB`}
               </span>
-              {e.status === "idle" && <button onClick={() => setFiles(prev => prev.filter((_,j)=>j!==i))} style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>✕</button>}
+              {e.status === "idle" && <button onClick={() => setQueue(prev => prev.filter((_,j)=>j!==i))} style={{ fontSize: 10, color: "#A89878", background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>✕</button>}
             </div>
           ))}
         </div>
       )}
-
-      {/* Upload button */}
-      {pendingCount > 0 && (
-        <button onClick={uploadAll} style={{ marginTop: 8, width: "100%", padding: "8px 0", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-          ↑ Ladda upp {pendingCount} {pendingCount === 1 ? "fil" : "filer"}
-        </button>
-      )}
-      {doneCount > 0 && pendingCount === 0 && (
-        <button onClick={() => setFiles([])} style={{ marginTop: 8, width: "100%", padding: "6px 0", background: "none", border: "1px solid #DDD5C8", borderRadius: 7, color: "#8A7D6B", fontSize: 11, cursor: "pointer" }}>
-          Rensa ({doneCount} uppladdade)
-        </button>
-      )}
+      {pendingCount > 0 && <button onClick={uploadAll} style={{ marginTop: 6, width: "100%", padding: "8px 0", background: "#5B7F6E", color: "#fff", border: "none", borderRadius: 7, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>↑ Ladda upp {pendingCount} {pendingCount===1?"fil":"filer"}</button>}
+      {doneCount > 0 && pendingCount === 0 && <button onClick={() => setQueue([])} style={{ marginTop: 6, width: "100%", padding: "6px 0", background: "none", border: "1px solid #DDD5C8", borderRadius: 7, color: "#8A7D6B", fontSize: 11, cursor: "pointer" }}>Rensa ({doneCount} uppladdade)</button>}
     </div>
   );
 }
