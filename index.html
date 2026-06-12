@@ -164,12 +164,9 @@ function getGithubReadToken() { return localStorage.getItem(GITHUB_TOKEN_KEY) ||
 function setGithubReadToken(t) { if (t) localStorage.setItem(GITHUB_TOKEN_KEY, t); else localStorage.removeItem(GITHUB_TOKEN_KEY); }
 
 function ghApiHeaders() {
-  // Auto-login: if site is authenticated, always use account 0's token
   if (localStorage.getItem(SITE_AUTH_KEY) === "1") {
     const account = UPLOAD_ACCOUNTS[0];
-    if (account?.tokenEnc) {
-      return { Accept: "application/vnd.github.v3+json", Authorization: `token ${decodeToken(account.tokenEnc)}` };
-    }
+    if (account?.tokenEnc) return { Accept: "application/vnd.github.v3+json", Authorization: `token ${decodeToken(account.tokenEnc)}` };
   }
   const saved = localStorage.getItem(UPLOAD_SESSION_KEY);
   if (saved) {
@@ -414,9 +411,7 @@ function FileCard({ file, index, onRemove, onPreview }) {
 // ─── File Attachments Section ───
 function FileAttachments({ files, onChange, onPreview, taskTitle }) {
   function slugify(str) {
-    return (str || "okant").toLowerCase()
-      .replace(/å/g,"a").replace(/ä/g,"a").replace(/ö/g,"o")
-      .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0, 40) || "okant";
+    return (str || "okant").toLowerCase().replace(/å/g,"a").replace(/ä/g,"a").replace(/ö/g,"o").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0, 40) || "okant";
   }
   const targetPath = "BILDER/uppgifter/" + slugify(taskTitle);
   return (
@@ -427,9 +422,7 @@ function FileAttachments({ files, onChange, onPreview, taskTitle }) {
       </div>
       {files.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          {files.map((f, i) => (
-            <FileCard key={i} file={f} index={i} onRemove={idx => onChange(files.filter((_, j) => j !== idx))} onPreview={onPreview} />
-          ))}
+          {files.map((f, i) => <FileCard key={i} file={f} index={i} onRemove={idx => onChange(files.filter((_, j) => j !== idx))} onPreview={onPreview} />)}
           {files.length > 1 && (
             <div style={{ textAlign: "right", marginTop: 2 }}>
               <button onClick={() => { files.forEach((f, i) => { setTimeout(() => { window.open(fileDownloadUrl(f.url), "_blank"); }, i * 500); }); showToast("Laddar ner alla filer…"); }}
@@ -468,10 +461,7 @@ function KanbanCard({ task, phases, onEdit, onDragStart, onDragOver, onDrop, onP
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", color: phase?.color, textTransform: "uppercase" }}>{phase?.label}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {Object.entries(filesByType).map(([type, count]) => {
-            const def = getFileTypeDef(type);
-            return <span key={type} style={{ fontSize: 8, fontWeight: 800, background: def.color, color: "#fff", padding: "1px 4px", borderRadius: 3, letterSpacing: "0.03em" }}>{def.icon} {count > 1 ? count : ""}</span>;
-          })}
+          {Object.entries(filesByType).map(([type, count]) => { const def = getFileTypeDef(type); return <span key={type} style={{ fontSize: 8, fontWeight: 800, background: def.color, color: "#fff", padding: "1px 4px", borderRadius: 3, letterSpacing: "0.03em" }}>{def.icon} {count > 1 ? count : ""}</span>; })}
         </div>
       </div>
       {task.notes && <div style={{ fontSize: 11, color: "#8A7D6B", marginTop: 4, lineHeight: 1.35, whiteSpace: "pre-wrap" }}>{task.notes.length > 60 ? task.notes.slice(0, 60) + "…" : task.notes}</div>}
@@ -891,7 +881,7 @@ function decodeToken(enc) { return xorObfuscate(atob(enc), "marga1918"); }
 // ║  och klistra in resultatet som TOKEN_ENC nedan          ║
 // ╚══════════════════════════════════════════════════════════╝
 const UPLOAD_ACCOUNTS = [
-  { id: "konto1", name: "Mats",    password: "marga1",  tokenEnc: "CggGDxRTZkFZGT5DViJzc3N7OCBCPhADUwFTL1IiPi5zZkMMGjY/FTJZDmlvBRcHAlAEa218Wy5AAVcEewNoHQY8NARjCAhsBlk8CFB+aH5rWiQkJgZJaENcGDsz" },
+  { id: "konto1", name: "Mats",    password: "marga1",  tokenEnc: "CggGDxRTZkFZGT5DViJzc3N7OCBCVSgEa3doB1kaX1FaZgFeDgYWUi9rXVxTFwInUQpfbGQMXxQxFgVjaQUJPxcxAy9ADGsOIjYqVlgHYXpqIjBAUVRleERpJ1Ml" },
   { id: "konto2", name: "Konto 2", password: "marga2",  tokenEnc: "" },
   { id: "konto3", name: "Konto 3", password: "marga3",  tokenEnc: "" },
   { id: "konto4", name: "Konto 4", password: "marga4",  tokenEnc: "" },
@@ -900,7 +890,6 @@ const UPLOAD_ACCOUNTS = [
 const UPLOAD_SESSION_KEY = "marga_upload_account_ls";
 
 function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
-  // Auto-login: if site is authenticated, always use account 0 — no manual login needed
   function getAutoSession() {
     if (localStorage.getItem(SITE_AUTH_KEY) === "1") {
       const account = UPLOAD_ACCOUNTS[0];
@@ -909,17 +898,13 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
     const saved = localStorage.getItem(UPLOAD_SESSION_KEY);
     return saved ? JSON.parse(saved) : null;
   }
-
   const [loggedIn, setLoggedIn] = useState(getAutoSession);
   const [selectedId, setSelectedId] = useState(UPLOAD_ACCOUNTS[0].id);
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
-  const [queue, setQueue] = useState([]);  // [{file, status, msg}]
+  const [queue, setQueue] = useState([]);
   const [dragging, setDragging] = useState(false);
-
-  // Re-check auto-login on every render in case site auth changed
   const effectiveLogin = loggedIn || getAutoSession();
-
   const inputStyle = { padding: "7px 10px", borderRadius: 6, border: "1.5px solid #DDD5C8", background: "#FFFDF8", fontSize: 12, color: "#3A2E22", outline: "none", fontFamily: "inherit" };
 
   function login() {
@@ -929,72 +914,39 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
     if (!account.tokenEnc) { setLoginError("Token ej konfigurerat"); return; }
     const session = { id: account.id, name: account.name };
     localStorage.setItem(UPLOAD_SESSION_KEY, JSON.stringify(session));
-    setLoggedIn(session);
-    setPassword(""); setLoginError("");
+    setLoggedIn(session); setPassword(""); setLoginError("");
   }
-
-  function logout() {
-    localStorage.removeItem(UPLOAD_SESSION_KEY);
-    setLoggedIn(null); setQueue([]);
-  }
-
+  function logout() { localStorage.removeItem(UPLOAD_SESSION_KEY); setLoggedIn(null); setQueue([]); }
   function getToken() {
     const session = effectiveLogin;
     const account = UPLOAD_ACCOUNTS.find(a => a.id === session?.id);
     return account ? decodeToken(account.tokenEnc) : null;
   }
-
   function addFiles(newFiles) {
     setQueue(prev => [...prev, ...Array.from(newFiles).map(f => ({ file: f, status: "idle", msg: "" }))]);
   }
-
-  async function uploadOne(idx, currentQueue) {
-    const token = getToken();
-    if (!token) return;
-    const entry = currentQueue[idx];
-    const f = entry.file;
+  async function uploadOne(idx) {
+    const token = getToken(); if (!token) return;
     setQueue(prev => prev.map((e,i) => i===idx ? {...e, status:"uploading"} : e));
+    const f = queue[idx].file;
     try {
-      const base64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = e => res(e.target.result.split(",")[1]);
-        r.onerror = () => rej(new Error("Läsfel"));
-        r.readAsDataURL(f);
-      });
+      const base64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result.split(",")[1]); r.onerror = () => rej(new Error("Läsfel")); r.readAsDataURL(f); });
       const path = `${targetPath}/${f.name}`;
-      const check = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
-        headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" }
-      });
+      const check = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, { headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" } });
       const sha = check.ok ? (await check.json()).sha : undefined;
       const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
-        method: "PUT",
-        headers: { Authorization: `token ${token}`, "Content-Type": "application/json", Accept: "application/vnd.github.v3+json" },
+        method: "PUT", headers: { Authorization: `token ${token}`, "Content-Type": "application/json", Accept: "application/vnd.github.v3+json" },
         body: JSON.stringify({ message: `${effectiveLogin.name}: laddar upp ${f.name}`, content: base64, ...(sha ? { sha } : {}) }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || `HTTP ${res.status}`);
-      }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || `HTTP ${res.status}`); }
       setQueue(prev => prev.map((e,i) => i===idx ? {...e, status:"done"} : e));
-      const rawUrl = `${GITHUB_RAW}/${path}`;
-      if (onUploaded) onUploaded({ url: rawUrl, name: f.name, type: detectFileType(f.name), addedAt: new Date().toISOString() });
-    } catch(e) {
-      setQueue(prev => prev.map((e2,i) => i===idx ? {...e2, status:"error", msg:e.message} : e2));
-    }
+      if (onUploaded) onUploaded({ url: `${GITHUB_RAW}/${path}`, name: f.name, type: detectFileType(f.name), addedAt: new Date().toISOString() });
+    } catch(e) { setQueue(prev => prev.map((e2,i) => i===idx ? {...e2, status:"error", msg:e.message} : e2)); }
   }
-
   async function uploadAll() {
-    const snap = queue;
-    for (let i = 0; i < snap.length; i++) {
-      if (snap[i].status === "idle") await uploadOne(i, snap);
-    }
+    for (let i = 0; i < queue.length; i++) { if (queue[i].status === "idle") await uploadOne(i); }
   }
-
-  function onDrop(e) {
-    e.preventDefault(); setDragging(false);
-    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
-  }
-
+  function onDrop(e) { e.preventDefault(); setDragging(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }
   const inputId = `file-input-${targetPath.replace(/\//g,"-")}`;
   const pendingCount = queue.filter(e => e.status === "idle").length;
   const doneCount = queue.filter(e => e.status === "done").length;
@@ -1006,10 +958,7 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
         <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setLoginError(""); }} style={{ ...inputStyle, cursor: "pointer" }}>
           {UPLOAD_ACCOUNTS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <input type="password" placeholder="Lösenord…" value={password}
-          onChange={e => { setPassword(e.target.value); setLoginError(""); }}
-          onKeyDown={e => e.key === "Enter" && login()}
-          style={{ ...inputStyle, width: 130 }} />
+        <input type="password" placeholder="Lösenord…" value={password} onChange={e => { setPassword(e.target.value); setLoginError(""); }} onKeyDown={e => e.key === "Enter" && login()} style={{ ...inputStyle, width: 130 }} />
         <button onClick={login} disabled={!password} style={{ padding: "7px 14px", background: password ? "#5B7F6E" : "#E5DDD0", color: password ? "#fff" : "#A89878", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: password ? "pointer" : "default" }}>Logga in</button>
       </div>
       {loginError && <div style={{ fontSize: 11, color: "#C75B4A", marginTop: 6, fontWeight: 600 }}>{loginError}</div>}
@@ -1025,8 +974,7 @@ function GithubUploader({ targetPath, onDone, onUploaded, compact }) {
       <div onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
         onClick={() => document.getElementById(inputId)?.click()}
         style={{ border: `2px dashed ${dragging ? "#5B7F6E" : "#C4B89E"}`, borderRadius: 8, padding: "14px", textAlign: "center", cursor: "pointer", background: dragging ? "rgba(91,127,110,0.06)" : "#FAF6EF", transition: "all 0.15s" }}>
-        <input id={inputId} type="file" multiple style={{ display: "none" }}
-          onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value=""; }} />
+        <input id={inputId} type="file" multiple style={{ display: "none" }} onChange={e => { if (e.target.files.length) addFiles(e.target.files); e.target.value=""; }} />
         <div style={{ fontSize: 18, marginBottom: 2 }}>↑</div>
         <div style={{ fontSize: 12, color: "#8A7D6B" }}>Dra hit eller klicka — flera filer OK</div>
       </div>
@@ -2401,13 +2349,11 @@ function SiteLogin({ onAuth }) {
     </div>
   );
 }
-
 function Root() {
   const [authed, setAuthed] = useState(() => localStorage.getItem(SITE_AUTH_KEY) === "1");
   if (!authed) return <SiteLogin onAuth={() => setAuthed(true)} />;
   return <App />;
 }
-
 ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
 
 </script>
