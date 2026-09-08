@@ -164,20 +164,7 @@ function getGithubReadToken() { return localStorage.getItem(GITHUB_TOKEN_KEY) ||
 function setGithubReadToken(t) { if (t) localStorage.setItem(GITHUB_TOKEN_KEY, t); else localStorage.removeItem(GITHUB_TOKEN_KEY); }
 
 function ghApiHeaders() {
-  if (localStorage.getItem(SITE_AUTH_KEY) === "1") {
-    const account = UPLOAD_ACCOUNTS[0];
-    if (account?.tokenEnc) return { Accept: "application/vnd.github.v3+json", Authorization: `token ${decodeToken(account.tokenEnc)}` };
-  }
-  const saved = localStorage.getItem(UPLOAD_SESSION_KEY);
-  if (saved) {
-    try {
-      const session = JSON.parse(saved);
-      const account = UPLOAD_ACCOUNTS.find(a => a.id === session.id);
-      if (account?.tokenEnc) {
-        return { Accept: "application/vnd.github.v3+json", Authorization: `token ${decodeToken(account.tokenEnc)}` };
-      }
-    } catch(e) {}
-  }
+  // Always use the read token for API reads — never the upload token
   const tok = getGithubReadToken();
   if (tok) return { Accept: "application/vnd.github.v3+json", Authorization: `token ${tok}` };
   return { Accept: "application/vnd.github.v3+json" };
